@@ -62,7 +62,7 @@ function consultar(banco: Banco, usuarioId: string, onde?: SQL) {
     .orderBy(asc(encontros.data), asc(encontros.id));
 }
 
-type Linha = ReturnType<ReturnType<typeof consultar>['all']>[number];
+type Linha = Awaited<ReturnType<typeof consultar>>[number];
 
 /** Mesmo formato do `Encontro` do front. */
 function formatar(usuarioId: string, linha: Linha) {
@@ -88,25 +88,24 @@ export class EncontrosServico {
     return this.app.banco;
   }
 
-  listar(usuarioId: string, { filtro, periodo }: FiltrosEncontros) {
+  async listar(usuarioId: string, { filtro, periodo }: FiltrosEncontros) {
     const onde = and(
       periodo === 'futuros' ? gte(encontros.data, new Date()) : undefined,
       filtro === 'vou' ? confirmouPresenca(usuarioId) : undefined,
     );
-    return consultar(this.banco, usuarioId, onde)
-      .all()
-      .map((linha) => formatar(usuarioId, linha));
+    const linhas = await consultar(this.banco, usuarioId, onde);
+    return linhas.map((linha) => formatar(usuarioId, linha));
   }
 
-  buscar(usuarioId: string, id: number) {
-    const linha = consultar(this.banco, usuarioId, eq(encontros.id, id)).get();
+  async buscar(usuarioId: string, id: number) {
+    const [linha] = await consultar(this.banco, usuarioId, eq(encontros.id, id));
     if (!linha) throw naoEncontrado('Encontro');
     return formatar(usuarioId, linha);
   }
 
-  criar(usuarioId: string, dados: DadosEncontro) {
-    const id = this.banco.transaction((tx) => {
-      const { id } = tx
+  async criar(usuarioId: string, dados: DadosEncontro) {
+    const id = await this.banco.transaction(async (tx) => {
+      const [criado] = await tx
         .insert(encontros)
         .values({
           organizadorId: usuarioId,
@@ -117,62 +116,58 @@ export class EncontrosServico {
           longitude: dados.posicao[1],
           data: new Date(dados.data),
         })
-        .returning({ id: encontros.id })
-        .get();
-      tx.insert(presencas).values({ encontroId: id, usuarioId }).run();
-      return id;
+        .returning({ id: encontros.id });
+      await tx.insert(presencas).values({ encontroId: criado!.id, usuarioId });
+      return criado!.id;
     });
     return this.buscar(usuarioId, id);
   }
 
   /** Garante que o encontro existe e que o usuário é o organizador. */
-  private exigirOrganizador(usuarioId: string, id: number) {
-    const encontro = this.banco
+  private async exigirOrganizador(usuarioId: string, id: number) {
+    const [encontro] = await this.banco
       .select({ organizadorId: encontros.organizadorId })
       .from(encontros)
-      .where(eq(encontros.id, id))
-      .get();
+      .where(eq(encontros.id, id));
     if (!encontro) throw naoEncontrado('Encontro');
     if (encontro.organizadorId !== usuarioId) {
       throw proibido('Só o organizador pode alterar este encontro');
     }
   }
 
-  atualizar(usuarioId: string, id: number, dados: Partial<DadosEncontro>) {
-    this.exigirOrganizador(usuarioId, id);
+  async atualizar(usuarioId: string, id: number, dados: Partial<DadosEncontro>) {
+    await this.exigirOrganizador(usuarioId, id);
     const mudancas = colunas(dados);
     if (Object.keys(mudancas).length) {
-      this.banco.update(encontros).set(mudancas).where(eq(encontros.id, id)).run();
+      await this.banco.update(encontros).set(mudancas).where(eq(encontros.id, id));
     }
     return this.buscar(usuarioId, id);
   }
 
-  apagar(usuarioId: string, id: number) {
-    this.exigirOrganizador(usuarioId, id);
-    this.banco.delete(encontros).where(eq(encontros.id, id)).run();
+  async apagar(usuarioId: string, id: number) {
+    await this.exigirOrganizador(usuarioId, id);
+    await this.banco.delete(encontros).where(eq(encontros.id, id));
   }
 
-  private exigirExistente(id: number) {
-    const existe = this.banco
+  private async exigirExistente(id: number) {
+    const [existe] = await this.banco
       .select({ id: encontros.id })
       .from(encontros)
-      .where(eq(encontros.id, id))
-      .get();
+      .where(eq(encontros.id, id));
     if (!existe) throw naoEncontrado('Encontro');
   }
 
-  confirmar(usuarioId: string, id: number) {
-    this.exigirExistente(id);
-    this.banco.insert(presencas).values({ encontroId: id, usuarioId }).onConflictDoNothing().run();
+  async confirmar(usuarioId: string, id: number) {
+    await this.exigirExistente(id);
+    await this.banco.insert(presencas).values({ encontroId: id, usuarioId }).onConflictDoNothing();
     return this.buscar(usuarioId, id);
   }
 
-  cancelar(usuarioId: string, id: number) {
-    this.exigirExistente(id);
-    this.banco
+  async cancelar(usuarioId: string, id: number) {
+    await this.exigirExistente(id);
+    await this.banco
       .delete(presencas)
-      .where(and(eq(presencas.encontroId, id), eq(presencas.usuarioId, usuarioId)))
-      .run();
+      .where(and(eq(presencas.encontroId, id), eq(presencas.usuarioId, usuarioId)));
     return this.buscar(usuarioId, id);
   }
 }

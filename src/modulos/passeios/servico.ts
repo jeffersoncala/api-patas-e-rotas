@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Banco } from '../../db/cliente.js';
 import { curtidas, passeios, pets, usuarios } from '../../db/schema.js';
 import { naoEncontrado } from '../../erros.js';
-import { dataIso, latLng } from '../../esquemas.js';
+import { dataIso, idNumerico, latLng } from '../../esquemas.js';
 
 /** Mesmo formato do `Passeio` do front. */
 export const esquemaPasseio = z
@@ -42,10 +42,15 @@ export const esquemaPaginaPasseios = z
  */
 export const esquemaCursor = z
   .string()
-  .regex(/^\d+\.\d+$/, 'Cursor inválido')
-  .transform((c) => {
-    const [ms, id] = c.split('.').map(Number) as [number, number];
-    return { data: new Date(ms), id };
+  .regex(/^\d{1,15}\.\d{1,10}$/, 'Cursor inválido')
+  .transform((c, ctx) => {
+    const [ms, idCursor] = c.split('.').map(Number) as [number, number];
+    const data = new Date(ms);
+    if (Number.isNaN(data.getTime()) || !idNumerico.safeParse(idCursor).success) {
+      ctx.addIssue({ code: 'custom', message: 'Cursor inválido' });
+      return z.NEVER;
+    }
+    return { data, id: idCursor };
   });
 
 type Cursor = z.output<typeof esquemaCursor>;
@@ -91,7 +96,7 @@ function consultar(banco: Banco, usuarioId: string, filtro: SQL | undefined) {
     .where(filtro);
 }
 
-type Linha = ReturnType<ReturnType<typeof consultar>['all']>[number];
+type Linha = Awaited<ReturnType<typeof consultar>>[number];
 
 const paraPasseio = (linha: Linha): Passeio => ({ ...linha, data: linha.data.toISOString() });
 
@@ -103,8 +108,8 @@ export interface FiltroPasseios {
 }
 
 /** Mais recentes primeiro, paginado por cursor (data e id do último item). */
-export function listarPasseios(banco: Banco, usuarioId: string, filtro: FiltroPasseios) {
-  const linhas = consultar(
+export async function listarPasseios(banco: Banco, usuarioId: string, filtro: FiltroPasseios) {
+  const linhas = await consultar(
     banco,
     usuarioId,
     and(
@@ -119,16 +124,15 @@ export function listarPasseios(banco: Banco, usuarioId: string, filtro: FiltroPa
   )
     .orderBy(desc(passeios.data), desc(passeios.id))
     // Um a mais só para saber se existe próxima página.
-    .limit(filtro.limite + 1)
-    .all();
+    .limit(filtro.limite + 1);
 
   const itens = linhas.slice(0, filtro.limite).map(paraPasseio);
   const temMais = linhas.length > filtro.limite;
   return { itens, proximoCursor: temMais ? cursorDe(itens.at(-1)!) : null };
 }
 
-export function buscarPasseio(banco: Banco, usuarioId: string, id: number): Passeio {
-  const linha = consultar(banco, usuarioId, eq(passeios.id, id)).get();
+export async function buscarPasseio(banco: Banco, usuarioId: string, id: number): Promise<Passeio> {
+  const [linha] = await consultar(banco, usuarioId, eq(passeios.id, id));
   if (!linha) throw naoEncontrado('Passeio');
   return paraPasseio(linha);
 }

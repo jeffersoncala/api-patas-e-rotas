@@ -7,6 +7,7 @@ import { ErroApi, naoEncontrado, proibido } from '../../erros.js';
 import {
   dataIso,
   erros,
+  idNumerico,
   paramId,
   semConteudo,
   seguranca,
@@ -29,12 +30,11 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
   app.addHook('onRequest', autenticar);
 
   /** 404 se o passeio não existir; devolve o dono para checar permissão. */
-  const autorDoPasseio = (id: number) => {
-    const passeio = app.banco
+  const autorDoPasseio = async (id: number) => {
+    const [passeio] = await app.banco
       .select({ usuarioId: passeios.usuarioId })
       .from(passeios)
-      .where(eq(passeios.id, id))
-      .get();
+      .where(eq(passeios.id, id));
     if (!passeio) throw naoEncontrado('Passeio');
     return passeio.usuarioId;
   };
@@ -90,7 +90,7 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
           pontos: trajeto,
           duracaoMin: z.number().int().min(1).max(1440),
           texto: z.string().trim().max(500).default(''),
-          rotaId: z.number().int().positive().optional(),
+          rotaId: idNumerico.optional(),
           rotaNome: textoObrigatorio(60)
             .optional()
             .describe(`Só quando não há rotaId; padrão "${PASSEIO_LIVRE}"`),
@@ -104,18 +104,17 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
 
       let rotaNome = req.body.rotaNome ?? PASSEIO_LIVRE;
       if (rotaId !== undefined) {
-        const rota = app.banco
+        const [rota] = await app.banco
           .select({ nome: rotas.nome })
           .from(rotas)
-          .where(eq(rotas.id, rotaId))
-          .get();
+          .where(eq(rotas.id, rotaId));
         if (!rota) {
           throw new ErroApi(400, 'Dados inválidos', { rotaId: 'Rota não encontrada' });
         }
         rotaNome = rota.nome;
       }
 
-      const { id } = app.banco
+      const [criado] = await app.banco
         .insert(passeios)
         .values({
           usuarioId,
@@ -127,9 +126,8 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
           texto,
           data: new Date(),
         })
-        .returning({ id: passeios.id })
-        .get();
-      return reply.status(201).send(buscarPasseio(app.banco, usuarioId, id));
+        .returning({ id: passeios.id });
+      return reply.status(201).send(await buscarPasseio(app.banco, usuarioId, criado!.id));
     },
   );
 
@@ -146,10 +144,10 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params;
-      if (autorDoPasseio(id) !== usuarioDe(req).id) {
+      if ((await autorDoPasseio(id)) !== usuarioDe(req).id) {
         throw proibido('Só quem registrou pode apagar o passeio');
       }
-      app.banco.delete(passeios).where(eq(passeios.id, id)).run();
+      await app.banco.delete(passeios).where(eq(passeios.id, id));
       return reply.status(204).send(null);
     },
   );
@@ -165,11 +163,11 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaPasseio, ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id: usuarioId } = usuarioDe(req);
       const { id } = req.params;
-      autorDoPasseio(id);
-      app.banco.insert(curtidas).values({ passeioId: id, usuarioId }).onConflictDoNothing().run();
+      await autorDoPasseio(id);
+      await app.banco.insert(curtidas).values({ passeioId: id, usuarioId }).onConflictDoNothing();
       return buscarPasseio(app.banco, usuarioId, id);
     },
   );
@@ -185,14 +183,13 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaPasseio, ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id: usuarioId } = usuarioDe(req);
       const { id } = req.params;
-      autorDoPasseio(id);
-      app.banco
+      await autorDoPasseio(id);
+      await app.banco
         .delete(curtidas)
-        .where(and(eq(curtidas.passeioId, id), eq(curtidas.usuarioId, usuarioId)))
-        .run();
+        .where(and(eq(curtidas.passeioId, id), eq(curtidas.usuarioId, usuarioId)));
       return buscarPasseio(app.banco, usuarioId, id);
     },
   );

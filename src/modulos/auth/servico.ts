@@ -44,35 +44,31 @@ export class AuthServico {
   }
 
   async cadastrar(dados: DadosCadastro) {
-    const existe = this.banco
+    const [existe] = await this.banco
       .select({ id: usuarios.id })
       .from(usuarios)
-      .where(eq(usuarios.email, dados.email))
-      .get();
+      .where(eq(usuarios.email, dados.email));
     if (existe) throw new ErroApi(409, 'Já existe uma conta com esse e-mail');
 
     const senhaHash = await gerarHashSenha(dados.password, this.app.custoSenha);
-    const usuario = this.banco.transaction((tx) => {
-      const criado = tx
+    const usuario = await this.banco.transaction(async (tx) => {
+      const [criado] = await tx
         .insert(usuarios)
         .values({ email: dados.email, senhaHash, tutor: dados.tutor })
-        .returning()
-        .get();
-      tx.insert(pets)
-        .values({
-          usuarioId: criado.id,
-          nome: dados.pet,
-          especie: dados.especie,
-          porte: dados.porte,
-        })
-        .run();
-      return criado;
+        .returning();
+      await tx.insert(pets).values({
+        usuarioId: criado!.id,
+        nome: dados.pet,
+        especie: dados.especie,
+        porte: dados.porte,
+      });
+      return criado!;
     });
     return this.abrirSessao(usuario);
   }
 
   async entrar(email: string, senha: string) {
-    const usuario = this.banco.select().from(usuarios).where(eq(usuarios.email, email)).get();
+    const [usuario] = await this.banco.select().from(usuarios).where(eq(usuarios.email, email));
     const ok = usuario
       ? await conferirSenha(senha, usuario.senhaHash)
       : await conferirSenha(senha, await (hashFalso ??= gerarHashSenha('x', this.app.custoSenha)));
@@ -83,7 +79,7 @@ export class AuthServico {
   /** Troca o refresh token por um par novo; o antigo deixa de valer (rotação). */
   async renovar(refreshToken: string) {
     const agora = new Date();
-    const sessao = this.banco
+    const [sessao] = await this.banco
       .select()
       .from(sessoes)
       .where(
@@ -92,34 +88,31 @@ export class AuthServico {
           isNull(sessoes.revogadaEm),
           gt(sessoes.expiraEm, agora),
         ),
-      )
-      .get();
+      );
     if (!sessao) throw naoAutorizado('Refresh token inválido ou expirado');
 
     const novoRefresh = gerarTokenOpaco();
-    this.banco
+    await this.banco
       .update(sessoes)
       .set({
         refreshHash: hashToken(novoRefresh),
         expiraEm: new Date(agora.getTime() + this.app.config.refreshTokenTtlDias * DIA_MS),
       })
-      .where(eq(sessoes.id, sessao.id))
-      .run();
+      .where(eq(sessoes.id, sessao.id));
 
-    const usuario = this.buscarUsuario(sessao.usuarioId);
+    const usuario = await this.buscarUsuario(sessao.usuarioId);
     return this.resposta(usuario, sessao.id, novoRefresh);
   }
 
-  encerrarSessao(sessaoId: string): void {
-    this.banco
+  async encerrarSessao(sessaoId: string): Promise<void> {
+    await this.banco
       .update(sessoes)
       .set({ revogadaEm: new Date() })
-      .where(and(eq(sessoes.id, sessaoId), isNull(sessoes.revogadaEm)))
-      .run();
+      .where(and(eq(sessoes.id, sessaoId), isNull(sessoes.revogadaEm)));
   }
 
-  buscarUsuario(id: string): Usuario {
-    const usuario = this.banco.select().from(usuarios).where(eq(usuarios.id, id)).get();
+  async buscarUsuario(id: string): Promise<Usuario> {
+    const [usuario] = await this.banco.select().from(usuarios).where(eq(usuarios.id, id));
     if (!usuario) throw naoAutorizado();
     return usuario;
   }
@@ -129,18 +122,15 @@ export class AuthServico {
    * O link leva ao front, que chama `POST /auth/redefinir-senha` com o token.
    */
   async solicitarRedefinicao(email: string): Promise<void> {
-    const usuario = this.banco.select().from(usuarios).where(eq(usuarios.email, email)).get();
+    const [usuario] = await this.banco.select().from(usuarios).where(eq(usuarios.email, email));
     if (!usuario) return;
 
     const token = gerarTokenOpaco();
-    this.banco
-      .insert(redefinicoesSenha)
-      .values({
-        usuarioId: usuario.id,
-        tokenHash: hashToken(token),
-        expiraEm: new Date(Date.now() + VALIDADE_REDEFINICAO_MS),
-      })
-      .run();
+    await this.banco.insert(redefinicoesSenha).values({
+      usuarioId: usuario.id,
+      tokenHash: hashToken(token),
+      expiraEm: new Date(Date.now() + VALIDADE_REDEFINICAO_MS),
+    });
 
     const link = `${this.app.config.urlFront}/redefinir-senha?token=${token}`;
     await this.app.enviarEmail({
@@ -153,7 +143,7 @@ export class AuthServico {
   /** Troca a senha e derruba todas as sessões abertas da conta. */
   async redefinirSenha(token: string, novaSenha: string): Promise<void> {
     const agora = new Date();
-    const pedido = this.banco
+    const [pedido] = await this.banco
       .select()
       .from(redefinicoesSenha)
       .where(
@@ -162,43 +152,40 @@ export class AuthServico {
           isNull(redefinicoesSenha.usadaEm),
           gt(redefinicoesSenha.expiraEm, agora),
         ),
-      )
-      .get();
+      );
     if (!pedido) throw new ErroApi(400, 'Link de redefinição inválido ou expirado');
 
     const senhaHash = await gerarHashSenha(novaSenha, this.app.custoSenha);
-    this.banco.transaction((tx) => {
-      tx.update(usuarios).set({ senhaHash }).where(eq(usuarios.id, pedido.usuarioId)).run();
-      tx.update(redefinicoesSenha)
+    await this.banco.transaction(async (tx) => {
+      await tx.update(usuarios).set({ senhaHash }).where(eq(usuarios.id, pedido.usuarioId));
+      await tx
+        .update(redefinicoesSenha)
         .set({ usadaEm: agora })
-        .where(eq(redefinicoesSenha.usuarioId, pedido.usuarioId))
-        .run();
-      tx.update(sessoes)
+        .where(eq(redefinicoesSenha.usuarioId, pedido.usuarioId));
+      await tx
+        .update(sessoes)
         .set({ revogadaEm: agora })
-        .where(and(eq(sessoes.usuarioId, pedido.usuarioId), isNull(sessoes.revogadaEm)))
-        .run();
+        .where(and(eq(sessoes.usuarioId, pedido.usuarioId), isNull(sessoes.revogadaEm)));
     });
   }
 
   private async abrirSessao(usuario: Usuario) {
     const agora = new Date();
     const refresh = gerarTokenOpaco();
-    const sessao = this.banco
+    const [sessao] = await this.banco
       .insert(sessoes)
       .values({
         usuarioId: usuario.id,
         refreshHash: hashToken(refresh),
         expiraEm: new Date(agora.getTime() + this.app.config.refreshTokenTtlDias * DIA_MS),
       })
-      .returning({ id: sessoes.id })
-      .get();
-    const atualizado = this.banco
+      .returning({ id: sessoes.id });
+    const [atualizado] = await this.banco
       .update(usuarios)
       .set({ ultimoAcessoEm: agora })
       .where(eq(usuarios.id, usuario.id))
-      .returning()
-      .get();
-    return this.resposta(atualizado, sessao.id, refresh);
+      .returning();
+    return this.resposta(atualizado!, sessao!.id, refresh);
   }
 
   private async resposta(usuario: Usuario, sessaoId: string, refreshToken: string) {

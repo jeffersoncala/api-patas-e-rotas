@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run build && if [ \"$VERCEL_ENV\" = production ]; then node dist/db/migrar.js; fi && mkdir -p public",
+  "outputDirectory": "public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{dist/**,node_modules/@fastify/swagger-ui/static/**}"
+    }
+  }
+}

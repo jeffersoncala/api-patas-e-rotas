@@ -1,8 +1,10 @@
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { carregarConfig } from '../config.js';
-import { abrirBanco } from './cliente.js';
+import { abrirBanco, PASTA_MIGRACOES } from './cliente.js';
 
-// As migrações também rodam sozinhas ao subir a API; este script serve para aplicá-las
-// sem subir o servidor (ex.: no deploy, antes de trocar a versão).
+// Aplica as migrações pendentes. Rode antes de publicar uma versão que mude o schema.
 const config = carregarConfig();
-abrirBanco(config.arquivoBanco).$client.close();
-console.log(`Migrações aplicadas em ${config.arquivoBanco}`);
+const banco = abrirBanco(config.urlBanco);
+await migrate(banco, { migrationsFolder: PASTA_MIGRACOES });
+await banco.$client.end();
+console.log('Migrações aplicadas');

@@ -94,7 +94,7 @@ export const encontrosEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 201: esquemaEncontro, ...erros(400, 401) },
       },
     },
-    async (req, reply) => reply.status(201).send(servico.criar(usuarioDe(req).id, req.body)),
+    async (req, reply) => reply.status(201).send(await servico.criar(usuarioDe(req).id, req.body)),
   );
 
   app.patch(
@@ -124,7 +124,7 @@ export const encontrosEndpoints: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (req, reply) => {
-      servico.apagar(usuarioDe(req).id, req.params.id);
+      await servico.apagar(usuarioDe(req).id, req.params.id);
       return reply.status(204).send(null);
     },
   );

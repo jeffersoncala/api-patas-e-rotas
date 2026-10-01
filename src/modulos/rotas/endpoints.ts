@@ -28,18 +28,17 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
   app.addHook('onRequest', autenticar);
 
   /** 404 se a rota não existir; 403 se quem pede não for o autor. */
-  const exigirAutor = (id: number, usuarioId: string) => {
-    const rota = app.banco
+  const exigirAutor = async (id: number, usuarioId: string) => {
+    const [rota] = await app.banco
       .select({ autorId: rotas.autorId })
       .from(rotas)
-      .where(eq(rotas.id, id))
-      .get();
+      .where(eq(rotas.id, id));
     if (!rota) throw naoEncontrado('Rota', 'f');
     if (rota.autorId !== usuarioId) throw proibido('Só quem criou pode alterar a rota');
   };
 
-  const exigirRota = (id: number) => {
-    const rota = app.banco.select({ id: rotas.id }).from(rotas).where(eq(rotas.id, id)).get();
+  const exigirRota = async (id: number) => {
+    const [rota] = await app.banco.select({ id: rotas.id }).from(rotas).where(eq(rotas.id, id));
     if (!rota) throw naoEncontrado('Rota', 'f');
   };
 
@@ -84,20 +83,19 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const { id: usuarioId } = usuarioDe(req);
-      const id = app.banco.transaction((tx) => {
-        const { id } = tx
+      const id = await app.banco.transaction(async (tx) => {
+        const [criada] = await tx
           .insert(rotas)
           .values({
             ...req.body,
             autorId: usuarioId,
             distanciaKm: distanciaTrajeto(req.body.pontos),
           })
-          .returning({ id: rotas.id })
-          .get();
-        tx.insert(favoritas).values({ rotaId: id, usuarioId }).run();
-        return id;
+          .returning({ id: rotas.id });
+        await tx.insert(favoritas).values({ rotaId: criada!.id, usuarioId });
+        return criada!.id;
       });
-      return reply.status(201).send(buscarRota(app.banco, usuarioId, id));
+      return reply.status(201).send(await buscarRota(app.banco, usuarioId, id));
     },
   );
 
@@ -114,24 +112,24 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaRota, ...erros(400, 401, 403, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id: usuarioId } = usuarioDe(req);
       const { id } = req.params;
-      exigirAutor(id, usuarioId);
+      await exigirAutor(id, usuarioId);
 
       const mudancas = {
         ...req.body,
         ...(req.body.pontos && { distanciaKm: distanciaTrajeto(req.body.pontos) }),
       };
       if (Object.keys(mudancas).length) {
-        app.banco.transaction((tx) => {
-          tx.update(rotas).set(mudancas).where(eq(rotas.id, id)).run();
+        await app.banco.transaction(async (tx) => {
+          await tx.update(rotas).set(mudancas).where(eq(rotas.id, id));
           // O nome é copiado nos passeios (para sobreviver à rota); mantém em dia.
           if (req.body.nome !== undefined) {
-            tx.update(passeios)
+            await tx
+              .update(passeios)
               .set({ rotaNome: req.body.nome })
-              .where(eq(passeios.rotaId, id))
-              .run();
+              .where(eq(passeios.rotaId, id));
           }
         });
       }
@@ -152,8 +150,8 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
     },
     async (req, reply) => {
       const { id } = req.params;
-      exigirAutor(id, usuarioDe(req).id);
-      app.banco.delete(rotas).where(eq(rotas.id, id)).run();
+      await exigirAutor(id, usuarioDe(req).id);
+      await app.banco.delete(rotas).where(eq(rotas.id, id));
       return reply.status(204).send(null);
     },
   );
@@ -169,11 +167,11 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaRota, ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id: usuarioId } = usuarioDe(req);
       const { id } = req.params;
-      exigirRota(id);
-      app.banco.insert(favoritas).values({ rotaId: id, usuarioId }).onConflictDoNothing().run();
+      await exigirRota(id);
+      await app.banco.insert(favoritas).values({ rotaId: id, usuarioId }).onConflictDoNothing();
       return buscarRota(app.banco, usuarioId, id);
     },
   );
@@ -189,14 +187,13 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaRota, ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id: usuarioId } = usuarioDe(req);
       const { id } = req.params;
-      exigirRota(id);
-      app.banco
+      await exigirRota(id);
+      await app.banco
         .delete(favoritas)
-        .where(and(eq(favoritas.rotaId, id), eq(favoritas.usuarioId, usuarioId)))
-        .run();
+        .where(and(eq(favoritas.rotaId, id), eq(favoritas.usuarioId, usuarioId)));
       return buscarRota(app.banco, usuarioId, id);
     },
   );
@@ -213,13 +210,14 @@ export const rotasEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: z.array(esquemaPasseio), ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id } = req.params;
-      exigirRota(id);
-      return listarPasseios(app.banco, usuarioDe(req).id, {
+      await exigirRota(id);
+      const pagina = await listarPasseios(app.banco, usuarioDe(req).id, {
         rotaId: id,
         limite: req.query.limite,
-      }).itens;
+      });
+      return pagina.itens;
     },
   );
 };

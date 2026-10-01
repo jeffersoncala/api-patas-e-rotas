@@ -2,8 +2,11 @@ node_modules/
 dist/
 coverage/
 .env
-# Banco SQLite local e arquivos auxiliares do modo WAL
+.env.*
+!.env.example
+# Banco SQLite da versão antiga (não é mais usado)
 dados/
-*.db
-*.db-shm
-*.db-wal
+
+# Pasta vazia criada no build da Vercel
+public/
+.vercel

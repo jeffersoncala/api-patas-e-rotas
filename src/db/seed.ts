@@ -228,42 +228,43 @@ const TUTORES = [
 ] as const;
 
 const config = carregarConfig();
-const banco = abrirBanco(config.arquivoBanco);
+const banco = abrirBanco(config.urlBanco);
 const resetar = process.argv.includes('--reset');
 
-if (!resetar && banco.select({ id: usuarios.id }).from(usuarios).limit(1).get()) {
+const [algum] = await banco.select({ id: usuarios.id }).from(usuarios).limit(1);
+if (!resetar && algum) {
   console.error(
     'O banco já tem dados. Use "npm run db:seed -- --reset" para apagar e popular de novo.',
   );
+  await banco.$client.end();
   process.exit(1);
 }
 
 const senhaHash = await gerarHashSenha('segredo123');
 
-banco.transaction((tx) => {
+await banco.transaction(async (tx) => {
   if (resetar) {
-    // Apagar os usuários leva todo o resto junto (ON DELETE CASCADE).
-    tx.delete(usuarios).run();
-    tx.run(sql`delete from sqlite_sequence`);
+    // Apagar os usuários leva todo o resto junto (CASCADE); os ids voltam a começar do 1.
+    await tx.execute(sql`truncate ${usuarios} restart identity cascade`);
   }
 
-  const [ana, rafael, julia, jeff] = TUTORES.map(({ email, tutor, pet, ...doPet }) => {
-    const u = tx.insert(usuarios).values({ email, tutor, senhaHash }).returning().get();
-    tx.insert(pets)
-      .values({ usuarioId: u.id, nome: pet, ...doPet })
-      .run();
-    return u;
-  }) as [Usuario, Usuario, Usuario, Usuario];
+  const criados: Usuario[] = [];
+  for (const { email, tutor, pet, ...doPet } of TUTORES) {
+    const [u] = await tx.insert(usuarios).values({ email, tutor, senhaHash }).returning();
+    await tx.insert(pets).values({ usuarioId: u!.id, nome: pet, ...doPet });
+    criados.push(u!);
+  }
+  const [ana, rafael, julia, jeff] = criados as [Usuario, Usuario, Usuario, Usuario];
 
-  const novaRota = (
+  const novaRota = async (
     autor: Usuario,
     nome: string,
     bairro: string,
     descricao: string,
     pontos: LatLng[],
     duracaoMin: number,
-  ) =>
-    tx
+  ) => {
+    const [rota] = await tx
       .insert(rotas)
       .values({
         autorId: autor.id,
@@ -274,10 +275,11 @@ banco.transaction((tx) => {
         duracaoMin,
         distanciaKm: distanciaTrajeto(pontos),
       })
-      .returning()
-      .get();
+      .returning();
+    return rota!;
+  };
 
-  const orla = novaRota(
+  const orla = await novaRota(
     ana,
     'Volta da orla',
     'Botafogo',
@@ -285,7 +287,7 @@ banco.transaction((tx) => {
     ORLA_BOTAFOGO,
     45,
   );
-  const guinle = novaRota(
+  const guinle = await novaRota(
     rafael,
     'Trilha das sombras',
     'Laranjeiras',
@@ -293,7 +295,7 @@ banco.transaction((tx) => {
     PARQUE_GUINLE,
     25,
   );
-  const praca = novaRota(
+  const praca = await novaRota(
     julia,
     'Circuito da praça',
     'Flamengo',
@@ -301,7 +303,7 @@ banco.transaction((tx) => {
     PRACA_FLAMENGO,
     15,
   );
-  const aterro = novaRota(
+  const aterro = await novaRota(
     jeff,
     'Reta do Aterro',
     'Flamengo',
@@ -322,10 +324,10 @@ banco.transaction((tx) => {
     [guinle, julia],
   ];
   for (const [rota, u] of favoritos) {
-    tx.insert(favoritas).values({ rotaId: rota.id, usuarioId: u.id }).run();
+    await tx.insert(favoritas).values({ rotaId: rota.id, usuarioId: u.id });
   }
 
-  const novoEncontro = (
+  const novoEncontro = async (
     organizador: Usuario,
     titulo: string,
     descricao: string,
@@ -334,7 +336,7 @@ banco.transaction((tx) => {
     data: Date,
     confirmados: Usuario[],
   ) => {
-    const e = tx
+    const [e] = await tx
       .insert(encontros)
       .values({
         organizadorId: organizador.id,
@@ -345,14 +347,13 @@ banco.transaction((tx) => {
         longitude,
         data,
       })
-      .returning()
-      .get();
+      .returning();
     for (const u of confirmados) {
-      tx.insert(presencas).values({ encontroId: e.id, usuarioId: u.id }).run();
+      await tx.insert(presencas).values({ encontroId: e!.id, usuarioId: u.id });
     }
   };
 
-  novoEncontro(
+  await novoEncontro(
     ana,
     'Rolê dos vira-latas',
     'Encontro mensal dos SRDs da região. Traga petiscos para dividir!',
@@ -361,7 +362,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(3 * DIA, 8, 30),
     [ana, rafael, julia, jeff],
   );
-  novoEncontro(
+  await novoEncontro(
     rafael,
     'Corrida leve com a turma',
     'Volta completa na Lagoa em ritmo tranquilo. Ideal para cães de porte médio e grande.',
@@ -370,7 +371,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(4 * DIA, 7),
     [rafael, ana],
   );
-  novoEncontro(
+  await novoEncontro(
     julia,
     'Socialização de filhotes',
     'Espaço seguro para filhotes com as vacinas em dia aprenderem a brincar.',
@@ -380,7 +381,7 @@ banco.transaction((tx) => {
     [julia],
   );
 
-  const novoPasseio = (
+  const novoPasseio = async (
     autor: Usuario,
     rota: Rota,
     duracaoMin: number,
@@ -388,7 +389,7 @@ banco.transaction((tx) => {
     data: Date,
     curtiram: Usuario[],
   ) => {
-    const p = tx
+    const [p] = await tx
       .insert(passeios)
       .values({
         usuarioId: autor.id,
@@ -400,14 +401,13 @@ banco.transaction((tx) => {
         texto,
         data,
       })
-      .returning()
-      .get();
+      .returning();
     for (const u of curtiram) {
-      tx.insert(curtidas).values({ passeioId: p.id, usuarioId: u.id }).run();
+      await tx.insert(curtidas).values({ passeioId: p!.id, usuarioId: u.id });
     }
   };
 
-  novoPasseio(
+  await novoPasseio(
     ana,
     orla,
     48,
@@ -415,7 +415,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(-20 * MINUTO),
     [rafael, julia],
   );
-  novoPasseio(
+  await novoPasseio(
     rafael,
     guinle,
     27,
@@ -423,7 +423,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(-60 * MINUTO),
     [ana, julia, jeff],
   );
-  novoPasseio(
+  await novoPasseio(
     julia,
     praca,
     16,
@@ -431,7 +431,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(-3 * 60 * MINUTO),
     [ana],
   );
-  novoPasseio(
+  await novoPasseio(
     jeff,
     aterro,
     42,
@@ -439,7 +439,7 @@ banco.transaction((tx) => {
     emRelacaoAAgora(-DIA),
     [ana, rafael],
   );
-  novoPasseio(
+  await novoPasseio(
     jeff,
     orla,
     50,
@@ -452,4 +452,4 @@ banco.transaction((tx) => {
 console.log(
   'Banco populado. Entre com tutor@exemplo.com / segredo123 (ou ana@, rafael@, julia@exemplo.com).',
 );
-banco.$client.close();
+await banco.$client.end();

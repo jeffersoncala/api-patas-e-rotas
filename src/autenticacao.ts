@@ -19,7 +19,7 @@ declare module 'fastify' {
  * Hook `onRequest` das rotas protegidas: exige `Authorization: Bearer <accessToken>`.
  *
  * Além da assinatura, confere se a sessão do token ainda está ativa. É uma consulta por
- * chave primária no SQLite local, barata, e é o que faz o logout valer na hora (na API
+ * chave primária, barata, e é o que faz o logout valer na hora (na API
  * Java, que validava só a assinatura, o token revogado seguia aceito até expirar).
  */
 export async function autenticar(req: FastifyRequest, _reply: FastifyReply): Promise<void> {
@@ -35,7 +35,7 @@ export async function autenticar(req: FastifyRequest, _reply: FastifyReply): Pro
     throw naoAutorizado();
   }
 
-  const sessao = req.server.banco
+  const [sessao] = await req.server.banco
     .select({ id: sessoes.id })
     .from(sessoes)
     .where(
@@ -45,8 +45,7 @@ export async function autenticar(req: FastifyRequest, _reply: FastifyReply): Pro
         isNull(sessoes.revogadaEm),
         gt(sessoes.expiraEm, new Date()),
       ),
-    )
-    .get();
+    );
   if (!sessao) {
     throw naoAutorizado('Sessão encerrada. Entre novamente');
   }

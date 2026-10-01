@@ -42,8 +42,8 @@ const esquemaResumo = z
   })
   .meta({ id: 'ResumoPerfil' });
 
-function buscarPerfil(app: FastifyInstance, usuarioId: string) {
-  const linha = app.banco
+async function buscarPerfil(app: FastifyInstance, usuarioId: string) {
+  const [linha] = await app.banco
     .select({
       tutor: usuarios.tutor,
       email: usuarios.email,
@@ -57,8 +57,7 @@ function buscarPerfil(app: FastifyInstance, usuarioId: string) {
     })
     .from(usuarios)
     .innerJoin(pets, eq(pets.usuarioId, usuarios.id))
-    .where(eq(usuarios.id, usuarioId))
-    .get();
+    .where(eq(usuarios.id, usuarioId));
   if (!linha) throw naoEncontrado('Perfil');
   return linha;
 }
@@ -103,16 +102,16 @@ export const perfilEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaPerfil, ...erros(400, 401, 404) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id } = usuarioDe(req);
       const { tutor, pet, ...doPet } = req.body;
-      app.banco.transaction((tx) => {
+      await app.banco.transaction(async (tx) => {
         if (tutor !== undefined) {
-          tx.update(usuarios).set({ tutor }).where(eq(usuarios.id, id)).run();
+          await tx.update(usuarios).set({ tutor }).where(eq(usuarios.id, id));
         }
         const mudancasPet = { ...doPet, ...(pet !== undefined && { nome: pet }) };
         if (Object.keys(mudancasPet).length) {
-          tx.update(pets).set(mudancasPet).where(eq(pets.usuarioId, id)).run();
+          await tx.update(pets).set(mudancasPet).where(eq(pets.usuarioId, id));
         }
       });
       return buscarPerfil(app, id);
@@ -130,10 +129,7 @@ export const perfilEndpoints: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (req, reply) => {
-      app.banco
-        .delete(usuarios)
-        .where(eq(usuarios.id, usuarioDe(req).id))
-        .run();
+      await app.banco.delete(usuarios).where(eq(usuarios.id, usuarioDe(req).id));
       return reply.status(204).send(null);
     },
   );
@@ -148,24 +144,26 @@ export const perfilEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaResumo, ...erros(401) },
       },
     },
-    (req) => {
+    async (req) => {
       const { id } = usuarioDe(req);
       const agora = Date.now();
-      const totais = (desde?: Date) =>
-        app.banco
+      const totais = async (desde?: Date) => {
+        const [linha] = await app.banco
           .select({ km: sum(passeios.distanciaKm).mapWith(Number), quantidade: count() })
           .from(passeios)
-          .where(and(eq(passeios.usuarioId, id), desde && gte(passeios.data, desde)))
-          .get() ?? { km: 0, quantidade: 0 };
+          .where(and(eq(passeios.usuarioId, id), desde && gte(passeios.data, desde)));
+        return linha ?? { km: 0, quantidade: 0 };
+      };
 
-      const semana = totais(new Date(agora - SETE_DIAS_MS));
-      const total = totais();
-      const confirmados = app.banco
-        .select({ quantidade: count() })
-        .from(presencas)
-        .innerJoin(encontros, eq(encontros.id, presencas.encontroId))
-        .where(and(eq(presencas.usuarioId, id), gte(encontros.data, new Date(agora))))
-        .get();
+      const [semana, total, [confirmados]] = await Promise.all([
+        totais(new Date(agora - SETE_DIAS_MS)),
+        totais(),
+        app.banco
+          .select({ quantidade: count() })
+          .from(presencas)
+          .innerJoin(encontros, eq(encontros.id, presencas.encontroId))
+          .where(and(eq(presencas.usuarioId, id), gte(encontros.data, new Date(agora)))),
+      ]);
 
       return {
         kmSemana: arredondar(semana.km ?? 0),

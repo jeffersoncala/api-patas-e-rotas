@@ -1,33 +1,31 @@
 {
-  "version": "6",
-  "dialect": "sqlite",
-  "id": "2cc7ec6e-6d7d-4e6b-8b00-165aa0bea47e",
+  "id": "083f9cbc-0ac8-47c5-87eb-b0e36d7872bc",
   "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "curtidas": {
+    "public.curtidas": {
       "name": "curtidas",
+      "schema": "",
       "columns": {
         "passeio_id": {
           "name": "passeio_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -61,92 +59,105 @@
       },
       "compositePrimaryKeys": {
         "curtidas_passeio_id_usuario_id_pk": {
+          "name": "curtidas_passeio_id_usuario_id_pk",
           "columns": [
             "passeio_id",
             "usuario_id"
-          ],
-          "name": "curtidas_passeio_id_usuario_id_pk"
+          ]
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "encontros": {
+    "public.encontros": {
       "name": "encontros",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "identity": {
+            "type": "always",
+            "name": "encontros_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "organizador_id": {
           "name": "organizador_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "titulo": {
           "name": "titulo",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "descricao": {
           "name": "descricao",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "local": {
           "name": "local",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "latitude": {
           "name": "latitude",
-          "type": "real",
+          "type": "double precision",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "longitude": {
           "name": "longitude",
-          "type": "real",
+          "type": "double precision",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "data": {
           "name": "data",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {
         "encontros_data_idx": {
           "name": "encontros_data_idx",
           "columns": [
-            "data"
+            {
+              "expression": "data",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -166,32 +177,32 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "favoritas": {
+    "public.favoritas": {
       "name": "favoritas",
+      "schema": "",
       "columns": {
         "rota_id": {
           "name": "rota_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -225,106 +236,135 @@
       },
       "compositePrimaryKeys": {
         "favoritas_rota_id_usuario_id_pk": {
+          "name": "favoritas_rota_id_usuario_id_pk",
           "columns": [
             "rota_id",
             "usuario_id"
-          ],
-          "name": "favoritas_rota_id_usuario_id_pk"
+          ]
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "passeios": {
+    "public.passeios": {
       "name": "passeios",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "identity": {
+            "type": "always",
+            "name": "passeios_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "rota_id": {
           "name": "rota_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "rota_nome": {
           "name": "rota_nome",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "pontos": {
           "name": "pontos",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "distancia_km": {
           "name": "distancia_km",
-          "type": "real",
+          "type": "double precision",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "duracao_min": {
           "name": "duracao_min",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "texto": {
           "name": "texto",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "data": {
           "name": "data",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         }
       },
       "indexes": {
         "passeios_data_idx": {
           "name": "passeios_data_idx",
           "columns": [
-            "data"
+            {
+              "expression": "data",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "passeios_usuario_idx": {
           "name": "passeios_usuario_idx",
           "columns": [
-            "usuario_id"
+            {
+              "expression": "usuario_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "passeios_rota_idx": {
           "name": "passeios_rota_idx",
           "columns": [
-            "rota_id"
+            {
+              "expression": "rota_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -357,45 +397,54 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "pets": {
+    "public.pets": {
       "name": "pets",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "identity": {
+            "type": "always",
+            "name": "pets_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "nome": {
           "name": "nome",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "especie": {
           "name": "especie",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "raca": {
           "name": "raca",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "idade_anos": {
@@ -403,42 +452,30 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 1
         },
         "porte": {
           "name": "porte",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "bio": {
           "name": "bio",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "meta_semanal_km": {
           "name": "meta_semanal_km",
-          "type": "real",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 15
         }
       },
-      "indexes": {
-        "pets_usuario_id_unique": {
-          "name": "pets_usuario_id_unique",
-          "columns": [
-            "usuario_id"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "pets_usuario_id_usuarios_id_fk": {
           "name": "pets_usuario_id_usuarios_id_fk",
@@ -455,33 +492,41 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
+      "uniqueConstraints": {
+        "pets_usuario_id_unique": {
+          "name": "pets_usuario_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "usuario_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "presencas": {
+    "public.presencas": {
       "name": "presencas",
+      "schema": "",
       "columns": {
         "encontro_id": {
           "name": "encontro_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -515,72 +560,72 @@
       },
       "compositePrimaryKeys": {
         "presencas_encontro_id_usuario_id_pk": {
+          "name": "presencas_encontro_id_usuario_id_pk",
           "columns": [
             "encontro_id",
             "usuario_id"
-          ],
-          "name": "presencas_encontro_id_usuario_id_pk"
+          ]
         }
       },
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "redefinicoes_senha": {
+    "public.redefinicoes_senha": {
       "name": "redefinicoes_senha",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "identity": {
+            "type": "always",
+            "name": "redefinicoes_senha_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "token_hash": {
           "name": "token_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expira_em": {
           "name": "expira_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "usada_em": {
           "name": "usada_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
-      "indexes": {
-        "redefinicoes_senha_token_hash_unique": {
-          "name": "redefinicoes_senha_token_hash_unique",
-          "columns": [
-            "token_hash"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "redefinicoes_senha_usuario_id_usuarios_id_fk": {
           "name": "redefinicoes_senha_usuario_id_usuarios_id_fk",
@@ -597,76 +642,89 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
+      "uniqueConstraints": {
+        "redefinicoes_senha_token_hash_unique": {
+          "name": "redefinicoes_senha_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "rotas": {
+    "public.rotas": {
       "name": "rotas",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": true
+          "identity": {
+            "type": "always",
+            "name": "rotas_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "autor_id": {
           "name": "autor_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "nome": {
           "name": "nome",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "bairro": {
           "name": "bairro",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "descricao": {
           "name": "descricao",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "''"
         },
         "pontos": {
           "name": "pontos",
-          "type": "text",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "distancia_km": {
           "name": "distancia_km",
-          "type": "real",
+          "type": "double precision",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "duracao_min": {
           "name": "duracao_min",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -687,69 +745,68 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "sessoes": {
+    "public.sessoes": {
       "name": "sessoes",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "usuario_id": {
           "name": "usuario_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "refresh_hash": {
           "name": "refresh_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expira_em": {
           "name": "expira_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "revogada_em": {
           "name": "revogada_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         }
       },
       "indexes": {
-        "sessoes_refresh_hash_unique": {
-          "name": "sessoes_refresh_hash_unique",
-          "columns": [
-            "refresh_hash"
-          ],
-          "isUnique": true
-        },
         "sessoes_usuario_idx": {
           "name": "sessoes_usuario_idx",
           "columns": [
-            "usuario_id"
+            {
+              "expression": "usuario_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -768,79 +825,88 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
+      "uniqueConstraints": {
+        "sessoes_refresh_hash_unique": {
+          "name": "sessoes_refresh_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "refresh_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
-    "usuarios": {
+    "public.usuarios": {
       "name": "usuarios",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "autoincrement": false
+          "default": "gen_random_uuid()"
         },
         "email": {
           "name": "email",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "senha_hash": {
           "name": "senha_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "tutor": {
           "name": "tutor",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "criado_em": {
           "name": "criado_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(unixepoch('subsec') * 1000)"
+          "default": "now()"
         },
         "ultimo_acesso_em": {
           "name": "ultimo_acesso_em",
-          "type": "integer",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
-      "indexes": {
-        "usuarios_email_unique": {
-          "name": "usuarios_email_unique",
-          "columns": [
-            "email"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
+      "uniqueConstraints": {
+        "usuarios_email_unique": {
+          "name": "usuarios_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
     }
   },
-  "views": {},
   "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "internal": {
-    "indexes": {}
+    "tables": {}
   }
 }

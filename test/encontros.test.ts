@@ -102,7 +102,7 @@ describe('encontros', () => {
     await criar(app, ana.headers, { titulo: 'Depois', data: emDias(5) });
     await criar(app, bia.headers, { titulo: 'Antes', data: emDias(1) });
     // Encontro que já passou: a API não deixa criar, então vai direto no banco.
-    const passado = app.banco
+    const [passado] = await app.banco
       .insert(encontros)
       .values({
         organizadorId: ana.usuario.id,
@@ -112,9 +112,10 @@ describe('encontros', () => {
         longitude: 0,
         data: new Date(Date.now() - DIA_MS),
       })
-      .returning()
-      .get();
-    app.banco.insert(presencas).values({ encontroId: passado.id, usuarioId: ana.usuario.id }).run();
+      .returning();
+    await app.banco
+      .insert(presencas)
+      .values({ encontroId: passado!.id, usuarioId: ana.usuario.id });
 
     const titulos = async (url: string) =>
       (await app.inject({ url, headers: ana.headers }))

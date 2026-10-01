@@ -94,7 +94,7 @@ export const authEndpoints: FastifyPluginAsyncZod = async (app) => {
         response: { 200: esquemaUsuario, ...erros(401) },
       },
     },
-    (req) => usuarioPublico(servico.buscarUsuario(usuarioDe(req).id)),
+    async (req) => usuarioPublico(await servico.buscarUsuario(usuarioDe(req).id)),
   );
 
   app.post(
@@ -109,7 +109,7 @@ export const authEndpoints: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (req, reply) => {
-      servico.encerrarSessao(usuarioDe(req).sessaoId);
+      await servico.encerrarSessao(usuarioDe(req).sessaoId);
       return reply.status(204).send(null);
     },
   );

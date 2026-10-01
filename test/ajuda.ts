@@ -1,25 +1,50 @@
-import { afterEach } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
+import { afterEach, beforeAll } from 'vitest';
 import { criarApp, type App } from '../src/app.js';
 import { carregarConfig } from '../src/config.js';
-import { abrirBanco } from '../src/db/cliente.js';
+import { PASTA_MIGRACOES } from '../src/db/cliente.js';
+import * as schema from '../src/db/schema.js';
 import type { Email } from '../src/email.js';
 
-const abertos: App[] = [];
+const abertos: { app: App; pg: PGlite }[] = [];
 afterEach(async () => {
-  await Promise.all(abertos.splice(0).map((app) => app.close()));
+  await Promise.all(
+    abertos.splice(0).map(async ({ app, pg }) => {
+      await app.close();
+      await pg.close();
+    }),
+  );
 });
 
-/** App com banco SQLite em memória, novo e vazio a cada chamada. */
+/** Banco já migrado, criado uma vez por arquivo de teste; cada teste usa uma cópia dele. */
+let modelo: Promise<PGlite> | undefined;
+const criarModelo = async () => {
+  const pg = new PGlite();
+  await migrate(drizzle({ client: pg }), { migrationsFolder: PASTA_MIGRACOES });
+  return pg;
+};
+// Subir o PGlite (WASM) e migrar leva alguns segundos: fica fora do tempo dos testes.
+beforeAll(async () => {
+  await (modelo ??= criarModelo());
+}, 60_000);
+
+/** App com um Postgres em memória (PGlite), novo e vazio a cada chamada. */
 export async function criarAppTeste() {
+  // `clone()` é tipado como a interface genérica, mas devolve um PGlite.
+  const pg = (await (await (modelo ??= criarModelo())).clone()) as PGlite;
+  const banco = drizzle({ client: pg, schema });
+
   const emails: Email[] = [];
   const app = await criarApp({
     config: carregarConfig({ NODE_ENV: 'test' }),
-    banco: abrirBanco(':memory:'),
+    banco,
     enviarEmail: async (email) => {
       emails.push(email);
     },
   });
-  abertos.push(app);
+  abertos.push({ app, pg });
   return { app, emails };
 }
 

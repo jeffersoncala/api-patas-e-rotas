@@ -12,7 +12,10 @@ export const latLng = z
 
 export const trajeto = z.array(latLng).min(2).max(5000);
 
-export const paramId = z.object({ id: z.coerce.number().int().positive() });
+/** Ids numéricos são `integer` (32 bits) no Postgres: acima disso a consulta daria erro. */
+export const idNumerico = z.number().int().positive().max(2_147_483_647);
+
+export const paramId = z.object({ id: z.coerce.number().pipe(idNumerico) });
 
 /** Datas saem sempre em ISO 8601 (UTC). */
 export const dataIso = z.iso.datetime();

@@ -3,7 +3,7 @@ import { carregarConfig } from './config.js';
 import { abrirBanco } from './db/cliente.js';
 
 const config = carregarConfig();
-const banco = abrirBanco(config.arquivoBanco);
+const banco = abrirBanco(config.urlBanco);
 
 const app = await criarApp({
   config,
@@ -14,12 +14,12 @@ const app = await criarApp({
       : { level: 'info' },
 });
 
-// Encerramento gracioso: termina as requisições em andamento e fecha o SQLite.
+// Encerramento gracioso: termina as requisições em andamento e fecha as conexões.
 for (const sinal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(sinal, async () => {
     app.log.info(`${sinal} recebido, encerrando`);
     await app.close();
-    banco.$client.close();
+    await banco.$client.end();
     process.exit(0);
   });
 }

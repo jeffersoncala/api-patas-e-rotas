@@ -50,14 +50,19 @@ function consultar(banco: Banco, usuarioId: string, filtro: SQL | undefined) {
     .where(filtro);
 }
 
-export function listarRotas(banco: Banco, usuarioId: string, soFavoritas: boolean): Rota[] {
-  return consultar(banco, usuarioId, soFavoritas ? favoritaDe(usuarioId) : undefined)
-    .orderBy(asc(rotas.nome), asc(rotas.id))
-    .all();
+export function listarRotas(
+  banco: Banco,
+  usuarioId: string,
+  soFavoritas: boolean,
+): Promise<Rota[]> {
+  return consultar(banco, usuarioId, soFavoritas ? favoritaDe(usuarioId) : undefined).orderBy(
+    asc(rotas.nome),
+    asc(rotas.id),
+  );
 }
 
-export function buscarRota(banco: Banco, usuarioId: string, id: number): Rota {
-  const rota = consultar(banco, usuarioId, eq(rotas.id, id)).get();
+export async function buscarRota(banco: Banco, usuarioId: string, id: number): Promise<Rota> {
+  const [rota] = await consultar(banco, usuarioId, eq(rotas.id, id));
   if (!rota) throw naoEncontrado('Rota', 'f');
   return rota;
 }
