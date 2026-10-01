@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.env
+# Banco SQLite local e arquivos auxiliares do modo WAL
+dados/
+*.db
+*.db-shm
+*.db-wal
