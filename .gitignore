@@ -7,6 +7,4 @@ coverage/
 # Banco SQLite da versão antiga (não é mais usado)
 dados/
 
-# Pasta vazia criada no build da Vercel
-public/
 .vercel
