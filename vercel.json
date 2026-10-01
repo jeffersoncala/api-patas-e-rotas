@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npm run build && if [ \"$VERCEL_ENV\" = production ]; then node dist/db/migrar.js; fi && mkdir -p public",
+  "buildCommand": "npm run build && if [ \"$VERCEL_ENV\" = production ]; then node dist/db/migrar.js; fi && mkdir -p public && printf 'User-agent: *\\nDisallow: /\\n' > public/robots.txt",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {
