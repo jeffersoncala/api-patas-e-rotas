@@ -12,6 +12,11 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import {
+  armazenamentoIndisponivel,
+  armazenamentoSupabase,
+  type Armazenamento,
+} from './armazenamento.js';
 import type { Config } from './config.js';
 import type { Banco } from './db/cliente.js';
 import { registrarTratamentoDeErros } from './erros.js';
@@ -33,6 +38,7 @@ declare module 'fastify' {
     banco: Banco;
     tokens: Tokens;
     enviarEmail: EnviarEmail;
+    armazenamento: Armazenamento;
     /** Custo do scrypt: menor nos testes. */
     custoSenha: number;
   }
@@ -43,10 +49,12 @@ export interface OpcoesApp {
   banco: Banco;
   /** Por padrão só registra o e-mail no log; os testes trocam para capturar o link. */
   enviarEmail?: EnviarEmail;
+  /** Por padrão usa o Supabase Storage da config; os testes trocam por um em memória. */
+  armazenamento?: Armazenamento;
   logger?: FastifyServerOptions['logger'];
 }
 
-export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp) {
+export async function criarApp({ config, banco, enviarEmail, armazenamento, logger }: OpcoesApp) {
   const app = Fastify({
     logger: logger ?? false,
     // Atrás de proxy/load balancer o IP real vem no X-Forwarded-For (usado pelo rate limit).
@@ -60,6 +68,17 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
   app.decorate('banco', banco);
   app.decorate('tokens', new Tokens(config.jwtSegredo, config.accessTokenTtlSegundos));
   app.decorate('enviarEmail', enviarEmail ?? enviarEmailNoLog(app.log));
+  app.decorate(
+    'armazenamento',
+    armazenamento ??
+      (config.storage
+        ? armazenamentoSupabase(
+            config.storage.url,
+            config.storage.chave,
+            config.storage.bucketFotos,
+          )
+        : armazenamentoIndisponivel),
+  );
   app.decorate('custoSenha', config.ambiente === 'test' ? CUSTO_TESTE : CUSTO_PADRAO);
   app.decorateRequest('usuario', null);
 

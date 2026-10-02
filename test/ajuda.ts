@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterEach, beforeAll } from 'vitest';
 import { criarApp, type App } from '../src/app.js';
+import type { Armazenamento } from '../src/armazenamento.js';
 import { carregarConfig } from '../src/config.js';
 import { PASTA_MIGRACOES } from '../src/db/cliente.js';
 import * as schema from '../src/db/schema.js';
@@ -30,6 +31,19 @@ beforeAll(async () => {
   await (modelo ??= criarModelo());
 }, 60_000);
 
+/** Storage em memória: `enviar` simula o PUT que o front faz na URL de upload. */
+export function armazenamentoEmMemoria() {
+  const arquivos = new Set<string>();
+  const armazenamento: Armazenamento = {
+    urlDeUpload: async (caminho) => `https://storage.teste/upload/${caminho}?token=x`,
+    existe: async (caminho) => arquivos.has(caminho),
+    urlsDeLeitura: async (caminhos) =>
+      caminhos.map((c) => (arquivos.has(c) ? `https://storage.teste/ler/${c}?token=x` : null)),
+    remover: async (caminhos) => caminhos.forEach((c) => arquivos.delete(c)),
+  };
+  return { armazenamento, arquivos, enviar: (caminho: string) => arquivos.add(caminho) };
+}
+
 /** App com um Postgres em memória (PGlite), novo e vazio a cada chamada. */
 export async function criarAppTeste() {
   // `clone()` é tipado como a interface genérica, mas devolve um PGlite.
@@ -37,7 +51,9 @@ export async function criarAppTeste() {
   const banco = drizzle({ client: pg, schema });
 
   const emails: Email[] = [];
+  const storage = armazenamentoEmMemoria();
   const app = await criarApp({
+    armazenamento: storage.armazenamento,
     config: carregarConfig({ NODE_ENV: 'test' }),
     banco,
     enviarEmail: async (email) => {
@@ -45,7 +61,7 @@ export async function criarAppTeste() {
     },
   });
   abertos.push({ app, pg });
-  return { app, emails };
+  return { app, emails, storage };
 }
 
 let sequencia = 0;

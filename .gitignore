@@ -4,7 +4,4 @@ coverage/
 .env
 .env.*
 !.env.example
-# Banco SQLite da versão antiga (não é mais usado)
-dados/
-
 .vercel

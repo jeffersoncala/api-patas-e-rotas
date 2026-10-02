@@ -41,7 +41,7 @@ export const authEndpoints: FastifyPluginAsyncZod = async (app) => {
       config: limite(5),
       schema: {
         tags: ['auth'],
-        summary: 'Cria a conta do tutor e o perfil do pet, já com a sessão aberta',
+        summary: 'Cria a conta do tutor e o primeiro pet, já com a sessão aberta',
         body: z.object({
           email,
           password: senha,

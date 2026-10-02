@@ -255,6 +255,15 @@ await banco.transaction(async (tx) => {
     criados.push(u!);
   }
   const [ana, rafael, julia, jeff] = criados as [Usuario, Usuario, Usuario, Usuario];
+  await tx.insert(pets).values({
+    usuarioId: jeff.id,
+    nome: 'Nina',
+    especie: 'gato',
+    porte: 'pequeno',
+    raca: 'Siamês',
+    idadeAnos: 6,
+    bio: 'Não passeia, mas fiscaliza o Bolota da janela.',
+  });
 
   const novaRota = async (
     autor: Usuario,

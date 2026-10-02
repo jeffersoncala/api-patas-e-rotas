@@ -17,6 +17,9 @@ const esquema = z
     REFRESH_TOKEN_TTL_DIAS: z.coerce.number().int().positive().default(30),
     CORS_ORIGIN: z.string().default('http://localhost:4200'),
     FRONT_URL: z.url().default('http://localhost:4200'),
+    SUPABASE_URL: z.union([z.url(), z.literal('')]).optional(),
+    SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+    SUPABASE_BUCKET_FOTOS: z.string().default('fotos_perfil'),
   })
   .transform((env, ctx) => {
     const segredo = env.JWT_SECRET || (env.NODE_ENV === 'production' ? '' : SEGREDO_DEV);
@@ -49,6 +52,15 @@ const esquema = z
         .map((o) => o.trim())
         .filter(Boolean),
       urlFront: env.FRONT_URL.replace(/\/$/, ''),
+      /** Sem URL e chave do Supabase, as rotas de foto respondem 503. */
+      storage:
+        env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+          ? {
+              url: env.SUPABASE_URL,
+              chave: env.SUPABASE_SERVICE_ROLE_KEY,
+              bucketFotos: env.SUPABASE_BUCKET_FOTOS,
+            }
+          : null,
     };
   });
 

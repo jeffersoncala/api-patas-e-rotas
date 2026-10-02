@@ -1,8 +1,9 @@
 import { and, asc, eq, gte, sql, type SQL } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Banco } from '../../db/cliente.js';
-import { encontros, pets, presencas, usuarios, type LatLng } from '../../db/schema.js';
+import { encontros, presencas, usuarios, type LatLng } from '../../db/schema.js';
 import { naoEncontrado, proibido } from '../../erros.js';
+import { nomesDosPets } from '../perfil/servico.js';
 
 export interface DadosEncontro {
   titulo: string;
@@ -48,7 +49,7 @@ function consultar(banco: Banco, usuarioId: string, onde?: SQL) {
       data: encontros.data,
       organizadorId: encontros.organizadorId,
       tutor: usuarios.tutor,
-      pet: pets.nome,
+      pets: nomesDosPets(encontros.organizadorId),
       confirmados:
         sql<number>`(select count(*) from ${presencas} where ${presencas.encontroId} = ${encontros.id})`.mapWith(
           Number,
@@ -57,7 +58,6 @@ function consultar(banco: Banco, usuarioId: string, onde?: SQL) {
     })
     .from(encontros)
     .innerJoin(usuarios, eq(usuarios.id, encontros.organizadorId))
-    .leftJoin(pets, eq(pets.usuarioId, encontros.organizadorId))
     .where(onde)
     .orderBy(asc(encontros.data), asc(encontros.id));
 }
@@ -75,7 +75,7 @@ function formatar(usuarioId: string, linha: Linha) {
     data: linha.data.toISOString(),
     confirmados: linha.confirmados,
     vou: linha.vou,
-    organizador: linha.pet ? `${linha.tutor} e ${linha.pet}` : linha.tutor,
+    organizador: linha.pets ? `${linha.tutor} e ${linha.pets}` : linha.tutor,
     organizadorId: linha.organizadorId,
     meu: linha.organizadorId === usuarioId,
   };

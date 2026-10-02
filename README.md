@@ -45,7 +45,9 @@ todas as rotas para ela.
 1. No Supabase, copie a connection string do **Transaction pooler** (porta 6543) em
    _Project Settings → Database_.
 2. Na Vercel, em _Settings → Environment Variables_, defina `NODE_ENV=production`,
-   `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN` (URL do front) e `FRONT_URL`.
+   `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN` (URL do front) e `FRONT_URL`. Para as fotos de
+   perfil, também `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (_Project Settings → API_); o
+   bucket é `fotos_perfil` (troque com `SUPABASE_BUCKET_FOTOS`).
 3. As migrações rodam sozinhas no build dos deploys de **produção** (`VERCEL_ENV=production`,
    veja o `buildCommand` do `vercel.json`). Se uma falhar, o deploy falha e a versão anterior
    continua no ar. Deploys de preview não mexem no banco.
@@ -67,8 +69,14 @@ schemas Zod que validam as requisições. Resumo:
 | `POST /auth/logout`                    | Encerra a sessão (204)                                                                 |
 | `POST /auth/recuperar-senha`           | Envia o link de redefinição (sempre 202)                                               |
 | `POST /auth/redefinir-senha`           | `{ token, password }` → troca a senha e derruba todas as sessões                       |
-| `GET / PATCH / DELETE /perfil`         | Dados do tutor e do pet; `DELETE` apaga a conta e tudo dela                            |
+| `GET / PATCH / DELETE /perfil`         | Tutor e pets; `PATCH` muda o tutor e a meta; `DELETE` apaga a conta e tudo dela         |
 | `GET /perfil/resumo`                   | km da semana, total, passeios e encontros confirmados                                  |
+| `POST /perfil/pets`                    | Adiciona um pet (até 10 por perfil; o 11º dá 409)                                       |
+| `GET / PATCH / DELETE /perfil/pets/:id`| Um pet; não dá para apagar o último (409)                                              |
+| `POST /perfil/foto/upload`             | URL assinada para o front enviar a foto (`PUT`, até 25 MB, `image/*`) direto ao storage |
+| `PUT / DELETE /perfil/foto`            | `{ caminho }` → confirma a foto do tutor (apaga a anterior); `DELETE` remove            |
+| `POST /perfil/pets/:id/foto/upload`    | Mesma coisa, para a foto do pet                                                        |
+| `PUT / DELETE /perfil/pets/:id/foto`   | `{ caminho }` → confirma a foto do pet; `DELETE` remove                                |
 | `GET /encontros` · `POST /encontros`   | Lista (`?filtro=todos\|vou&periodo=futuros\|todos`) e cria                             |
 | `GET / PATCH / DELETE /encontros/:id`  | Detalhe; alterar e apagar só o organizador                                             |
 | `PUT / DELETE /encontros/:id/presenca` | Confirma ou cancela presença                                                           |
@@ -109,6 +117,14 @@ Mesmo corpo da API Java, para o front não precisar tratar dois formatos:
 
 ## Decisões
 
+- **Fotos de perfil vão direto do front ao Supabase Storage.** A Vercel limita o corpo das
+  requisições a 4,5 MB, então a API só gera uma URL assinada de upload (válida por 2 h) e depois
+  confirma o arquivo. Tamanho e tipo são limitados pelo próprio bucket. O tutor e cada pet trazem
+  `fotoUrl`, uma URL assinada de leitura válida por 24 h (funciona com bucket público ou
+  privado). No bucket, `<usuario>/tutor/<uuid>` e `<usuario>/pets/<petId>/<uuid>`: a API só
+  aceita confirmar um caminho da pasta certa.
+- **Um tutor, de 1 a 10 pets.** A meta semanal é do tutor, porque os passeios são dele. No feed e
+  nos encontros, `pet` traz os nomes de todos os pets ("Mel, Thor").
 - **PostgreSQL no Supabase**, via `postgres.js` no pooler de transações (sem prepared
   statements), que aguenta as muitas conexões curtas das funções serverless.
 - **Sessões no banco.** O access token (JWT HS256, 1 h) leva o id da sessão, e cada requisição

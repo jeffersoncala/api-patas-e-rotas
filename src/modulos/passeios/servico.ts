@@ -1,15 +1,16 @@
 import { and, desc, eq, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Banco } from '../../db/cliente.js';
-import { curtidas, passeios, pets, usuarios } from '../../db/schema.js';
+import { curtidas, passeios, usuarios } from '../../db/schema.js';
 import { naoEncontrado } from '../../erros.js';
 import { dataIso, idNumerico, latLng } from '../../esquemas.js';
+import { nomesDosPets } from '../perfil/servico.js';
 
 /** Mesmo formato do `Passeio` do front. */
 export const esquemaPasseio = z
   .object({
     id: z.number().int(),
-    pet: z.string().describe('Nome do pet de quem registrou'),
+    pet: z.string().describe('Nomes dos pets de quem registrou ("Mel, Thor")'),
     tutor: z.string(),
     data: dataIso,
     rotaId: z.number().int().nullable().describe('null em passeio livre ou se a rota foi apagada'),
@@ -66,7 +67,7 @@ export const esquemaLimite = z.coerce.number().int().min(1).max(50).default(20);
 function colunas(usuarioId: string) {
   return {
     id: passeios.id,
-    pet: sql<string>`coalesce(${pets.nome}, '')`,
+    pet: nomesDosPets(passeios.usuarioId),
     tutor: usuarios.tutor,
     data: passeios.data,
     rotaId: passeios.rotaId,
@@ -92,7 +93,6 @@ function consultar(banco: Banco, usuarioId: string, filtro: SQL | undefined) {
     .select(colunas(usuarioId))
     .from(passeios)
     .innerJoin(usuarios, eq(usuarios.id, passeios.usuarioId))
-    .leftJoin(pets, eq(pets.usuarioId, passeios.usuarioId))
     .where(filtro);
 }
 

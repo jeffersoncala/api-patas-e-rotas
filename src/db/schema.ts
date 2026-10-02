@@ -42,22 +42,31 @@ export const usuarios = pgTable('usuarios', {
   email: text('email').notNull().unique(),
   senhaHash: text('senha_hash').notNull(),
   tutor: text('tutor').notNull(),
+  /** Caminho no bucket de fotos (`<usuarioId>/tutor/<uuid>`), ou nulo sem foto. */
+  fotoCaminho: text('foto_caminho'),
+  /** Os passeios são do tutor (não de um pet), então a meta também. */
+  metaSemanalKm: doublePrecision('meta_semanal_km').notNull().default(15),
   criadoEm: criadoEm(),
   ultimoAcessoEm: instante('ultimo_acesso_em'),
 }).enableRLS();
 
-/** Um pet por usuário por enquanto (é o que o front suporta); a tabela já permite mais. */
-export const pets = pgTable('pets', {
-  id: idSerial(),
-  usuarioId: refUsuario('usuario_id').unique(),
-  nome: text('nome').notNull(),
-  especie: text('especie', { enum: ESPECIES }).notNull(),
-  raca: text('raca').notNull().default(''),
-  idadeAnos: integer('idade_anos').notNull().default(1),
-  porte: text('porte', { enum: PORTES }).notNull(),
-  bio: text('bio').notNull().default(''),
-  metaSemanalKm: doublePrecision('meta_semanal_km').notNull().default(15),
-}).enableRLS();
+/** De 1 a 10 pets por tutor (limite conferido na API). */
+export const pets = pgTable(
+  'pets',
+  {
+    id: idSerial(),
+    usuarioId: refUsuario('usuario_id'),
+    nome: text('nome').notNull(),
+    especie: text('especie', { enum: ESPECIES }).notNull(),
+    raca: text('raca').notNull().default(''),
+    idadeAnos: integer('idade_anos').notNull().default(1),
+    porte: text('porte', { enum: PORTES }).notNull(),
+    bio: text('bio').notNull().default(''),
+    /** Caminho no bucket de fotos (`<usuarioId>/pets/<petId>/<uuid>`), ou nulo sem foto. */
+    fotoCaminho: text('foto_caminho'),
+  },
+  (t) => [index('pets_usuario_idx').on(t.usuarioId)],
+).enableRLS();
 
 /**
  * Uma linha por login. O refresh token é guardado só como hash; a rotação troca o

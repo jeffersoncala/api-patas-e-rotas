@@ -65,6 +65,21 @@ describe('passeios', () => {
     expect(nomeado).toMatchObject({ rotaNome: 'Volta no quarteirão', rotaId: null });
   });
 
+  it('mostra todos os pets do tutor no feed, sem repetir o passeio', async () => {
+    const { app } = await criarAppTeste();
+    const { headers } = await cadastrar(app, { pet: 'Bolota' });
+    await app.inject({
+      method: 'POST',
+      url: '/perfil/pets',
+      headers,
+      payload: { nome: 'Nina', especie: 'gato', porte: 'pequeno' },
+    });
+    await registrar(app, headers);
+
+    const feed = await app.inject({ url: '/passeios', headers });
+    expect(feed.json().itens.map((p: { pet: string }) => p.pet)).toEqual(['Bolota, Nina']);
+  });
+
   it('registra em uma rota copiando o nome dela; rota inexistente dá 400', async () => {
     const { app } = await criarAppTeste();
     const { headers } = await cadastrar(app);
