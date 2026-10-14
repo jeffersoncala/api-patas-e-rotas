@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrar.ts",
     "db:migrate:prod": "tsx --env-file=.env.production src/db/migrar.ts",
+    "db:local": "pglite-server --db=./.pglite --port=5432 --max-connections=10",
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts"
   },
   "type": "module",
@@ -29,7 +30,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite": "^0.5.10",
+    "@electric-sql/pglite-socket": "^0.2.13",
     "@types/node": "^22.20.4",
     "drizzle-kit": "^0.31.11",
     "pino-pretty": "^13.1.3",

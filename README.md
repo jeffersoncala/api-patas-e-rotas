@@ -7,17 +7,19 @@ Substitui a API Java anterior (`pataserotas-api`) e mantém o mesmo contrato de 
 
 ## Como rodar
 
-Requisitos: Node.js 22.12 ou mais novo e um Postgres (o do Supabase serve, ou um local).
+Requisitos: Node.js 22.12 ou mais novo. O Postgres local vem pelo npm (PGlite); não precisa instalar nada.
 
 ```bash
 npm install
-cp .env.example .env        # preencha JWT_SECRET e DATABASE_URL (veja os comentários no arquivo)
+cp .env.example .env        # com DATABASE_URL vazio, usa o Postgres local
+npm run db:local            # em outro terminal: Postgres local na porta 5432 (deixe rodando)
 npm run db:migrate          # cria as tabelas
 npm run db:seed             # opcional: cria os dados de exemplo do front
 npm run dev                 # http://localhost:3000  ·  documentação em /docs
 ```
 
-Sem `DATABASE_URL`, o desenvolvimento usa `postgres://postgres:postgres@localhost:5432/pataserotas`.
+Sem `DATABASE_URL`, o desenvolvimento usa `postgres://postgres:postgres@localhost:5432/pataserotas`,
+que é o banco do `npm run db:local` (os dados ficam em `.pglite/`; apague a pasta para zerar).
 As migrações **não** rodam sozinhas ao subir a API: localmente, rode `npm run db:migrate` sempre que
 o schema mudar (na Vercel elas rodam no build de produção).
 Os testes não precisam de banco nenhum: usam PGlite (Postgres em memória).
@@ -34,6 +36,7 @@ Contas do seed (senha `segredo123`): `tutor@exemplo.com` (Jeff e Bolota), `ana@e
 | `npm test`                    | Testes (cada teste usa um Postgres em memória, PGlite, isolado) |
 | `npm run typecheck`           | Checagem de tipos sem gerar arquivos                            |
 | `npm run db:generate`         | Gera uma migração nova a partir de `src/db/schema.ts`           |
+| `npm run db:local`            | Postgres local (PGlite) em `localhost:5432`, dados em `.pglite/` |
 | `npm run db:migrate`          | Aplica as migrações pendentes no banco do `DATABASE_URL`        |
 | `npm run db:seed`             | Popula com os dados de exemplo (`-- --reset` apaga tudo antes)  |
 
