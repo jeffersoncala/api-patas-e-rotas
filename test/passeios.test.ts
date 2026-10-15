@@ -2,9 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '../src/app.js';
 import type { LatLng } from '../src/db/schema.js';
 import { distanciaTrajeto } from '../src/geo.js';
+import { MAX_FOTOS_PASSEIO } from '../src/modulos/passeios/endpoints.js';
 import { cadastrar, criarAppTeste } from './ajuda.js';
 
 type Headers = { authorization: string };
+
+/** PNG de 1x1 pixel. */
+const PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 const PONTOS: LatLng[] = [
   [-22.9068, -43.1729],
@@ -57,6 +62,7 @@ describe('passeios', () => {
       distanciaKm: distanciaTrajeto(PONTOS),
       duracaoMin: 25,
       texto: 'Dia lindo',
+      fotos: [],
       curtidas: 0,
       curtido: false,
       meu: true,
@@ -240,6 +246,94 @@ describe('passeios', () => {
     expect((await app.inject({ url, headers: a.headers })).statusCode).toBe(404);
     expect((await app.inject({ method: 'DELETE', url, headers: a.headers })).statusCode).toBe(404);
     expect((await app.inject({ url: '/passeios' })).statusCode).toBe(401);
+  });
+
+  it('guarda as fotos do passeio na ordem, servidas no feed e apagadas junto', async () => {
+    const { app } = await criarAppTeste();
+    const { headers } = await cadastrar(app);
+    const { id, fotos } = (await registrar(app, headers, { fotos: [PNG, PNG] })) as unknown as {
+      id: number;
+      fotos: string[];
+    };
+    expect(fotos).toEqual([
+      expect.stringMatching(/^\/fotos\/[0-9a-f-]{36}$/),
+      expect.stringMatching(/^\/fotos\/[0-9a-f-]{36}$/),
+    ]);
+    expect(new Set(fotos).size).toBe(2);
+
+    const feed = await app.inject({ url: '/passeios', headers });
+    expect(feed.json().itens[0].fotos).toEqual(fotos);
+    expect((await app.inject({ url: fotos[0]! })).statusCode).toBe(200);
+
+    await app.inject({ method: 'DELETE', url: `/passeios/${id}`, headers });
+    for (const foto of fotos) {
+      expect((await app.inject({ url: foto })).statusCode).toBe(404);
+    }
+  });
+
+  it('altera texto, duração e fotos, mantendo, trocando a ordem e apagando as removidas', async () => {
+    const { app } = await criarAppTeste();
+    const a = await cadastrar(app);
+    const b = await cadastrar(app);
+    const { id, fotos } = (await registrar(app, a.headers, { fotos: [PNG, PNG] })) as unknown as {
+      id: number;
+      fotos: string[];
+    };
+    const [primeira, segunda] = fotos as [string, string];
+    const url = `/passeios/${id}`;
+    const alterar = (headers: Headers, payload: Record<string, unknown>) =>
+      app.inject({ method: 'PATCH', url, headers, payload });
+
+    expect((await alterar(b.headers, { texto: 'invadido' })).statusCode).toBe(403);
+
+    const alterado = await alterar(a.headers, {
+      texto: ' Choveu no fim ',
+      duracaoMin: 40,
+      fotos: [segunda, PNG],
+    });
+    expect(alterado.statusCode).toBe(200);
+    const corpo = alterado.json<{ texto: string; duracaoMin: number; fotos: string[] }>();
+    expect(corpo).toMatchObject({ texto: 'Choveu no fim', duracaoMin: 40 });
+    expect(corpo.fotos).toHaveLength(2);
+    expect(corpo.fotos[0]).toBe(segunda);
+    expect(corpo.fotos[1]).not.toBe(primeira);
+    expect((await app.inject({ url: primeira })).statusCode).toBe(404);
+    expect((await app.inject({ url: corpo.fotos[1]! })).statusCode).toBe(200);
+
+    // Sem `fotos`, as fotos ficam como estão.
+    const soTexto = await alterar(a.headers, { texto: 'Só o texto' });
+    expect(soTexto.json().fotos).toEqual(corpo.fotos);
+
+    // Foto de outro passeio não entra.
+    const outro = (await registrar(app, b.headers, { fotos: [PNG] })) as unknown as {
+      fotos: string[];
+    };
+    const alheia = await alterar(a.headers, { fotos: [outro.fotos[0]] });
+    expect(alheia.statusCode).toBe(400);
+    expect((await app.inject({ url, headers: a.headers })).json().fotos).toEqual(corpo.fotos);
+
+    const semFotos = await alterar(a.headers, { fotos: [] });
+    expect(semFotos.json().fotos).toEqual([]);
+    for (const foto of corpo.fotos) {
+      expect((await app.inject({ url: foto })).statusCode).toBe(404);
+    }
+  });
+
+  it('recusa fotos demais ou que não são imagem', async () => {
+    const { app } = await criarAppTeste();
+    const { headers } = await cadastrar(app);
+    const enviar = (fotos: string[]) =>
+      app.inject({
+        method: 'POST',
+        url: '/passeios',
+        headers,
+        payload: { pontos: PONTOS, duracaoMin: 25, fotos },
+      });
+
+    expect((await enviar(Array(MAX_FOTOS_PASSEIO + 1).fill(PNG))).statusCode).toBe(400);
+    expect((await enviar(['não é data url'])).statusCode).toBe(400);
+    const feed = await app.inject({ url: '/passeios', headers });
+    expect(feed.json().itens).toEqual([]);
   });
 
   it('o resumo do perfil reflete os passeios registrados', async () => {

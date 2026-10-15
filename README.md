@@ -29,16 +29,16 @@ Contas do seed (senha `segredo123`): `tutor@exemplo.com` (Jeff e Bolota), `ana@e
 
 ## Scripts
 
-| Comando                       | O que faz                                                       |
-| ----------------------------- | --------------------------------------------------------------- |
-| `npm run dev`                 | Sobe em modo watch, com log colorido                            |
-| `npm run build` / `npm start` | Compila para `dist/` e roda a versão compilada                  |
-| `npm test`                    | Testes (cada teste usa um Postgres em memória, PGlite, isolado) |
-| `npm run typecheck`           | Checagem de tipos sem gerar arquivos                            |
-| `npm run db:generate`         | Gera uma migração nova a partir de `src/db/schema.ts`           |
+| Comando                       | O que faz                                                        |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `npm run dev`                 | Sobe em modo watch, com log colorido                             |
+| `npm run build` / `npm start` | Compila para `dist/` e roda a versão compilada                   |
+| `npm test`                    | Testes (cada teste usa um Postgres em memória, PGlite, isolado)  |
+| `npm run typecheck`           | Checagem de tipos sem gerar arquivos                             |
+| `npm run db:generate`         | Gera uma migração nova a partir de `src/db/schema.ts`            |
 | `npm run db:local`            | Postgres local (PGlite) em `localhost:5432`, dados em `.pglite/` |
-| `npm run db:migrate`          | Aplica as migrações pendentes no banco do `DATABASE_URL`        |
-| `npm run db:seed`             | Popula com os dados de exemplo (`-- --reset` apaga tudo antes)  |
+| `npm run db:migrate`          | Aplica as migrações pendentes no banco do `DATABASE_URL`         |
+| `npm run db:seed`             | Popula com os dados de exemplo (`-- --reset` apaga tudo antes)   |
 
 ## Deploy (Vercel + Supabase)
 
@@ -61,32 +61,32 @@ enxerga nada, e a API, que conecta como dona das tabelas, não é afetada.
 A documentação interativa (OpenAPI/Swagger) fica em **`/docs`**, gerada a partir dos mesmos
 schemas Zod que validam as requisições. Resumo:
 
-| Método e caminho                       | Descrição                                                                              |
-| -------------------------------------- | -------------------------------------------------------------------------------------- |
-| `POST /auth/cadastro`                  | Cria a conta do tutor (foto opcional em `fotoTutor`) e já devolve os tokens            |
-| `POST /auth/login`                     | `{ email, password }` → `{ accessToken, tokenType, expiresEm, refreshToken, usuario }` |
-| `POST /auth/refresh`                   | Troca o refresh token por um par novo (o antigo deixa de valer)                        |
-| `GET /auth/me`                         | Usuário do token                                                                       |
-| `POST /auth/logout`                    | Encerra a sessão (204)                                                                 |
-| `POST /auth/recuperar-senha`           | Envia o link de redefinição (sempre 202)                                               |
-| `POST /auth/redefinir-senha`           | `{ token, password }` → troca a senha e derruba todas as sessões                       |
-| `GET / PATCH / DELETE /perfil`         | Tutor (nome, foto, meta semanal) e pets; `DELETE` apaga a conta e tudo dela            |
-| `PUT / DELETE /perfil/foto`            | Troca (`{ imagem: <data URL> }`) ou remove a foto do tutor                             |
-| `POST /perfil/pets`                    | Adiciona um pet (até 10 por tutor)                                                     |
-| `PATCH / DELETE /perfil/pets/:petId`   | Altera ou remove um pet                                                                |
-| `PUT / DELETE /perfil/pets/:petId/foto` | Troca ou remove a foto de um pet                                                      |
-| `GET /fotos/:id`                       | A imagem em si, pública e com cache imutável (para usar direto em `<img>`)             |
-| `GET /perfil/resumo`                   | km da semana, total, passeios e encontros confirmados                                  |
-| `GET /encontros` · `POST /encontros`   | Lista (`?filtro=todos\|vou&periodo=futuros\|todos`) e cria                             |
-| `GET / PATCH / DELETE /encontros/:id`  | Detalhe; alterar e apagar só o organizador                                             |
-| `PUT / DELETE /encontros/:id/presenca` | Confirma ou cancela presença                                                           |
-| `GET /rotas` · `POST /rotas`           | Lista (`?filtro=todas\|favoritas`) e cria                                              |
-| `GET / PATCH / DELETE /rotas/:id`      | Detalhe; alterar e apagar só o autor                                                   |
-| `PUT / DELETE /rotas/:id/favorita`     | Favorita ou desfavorita                                                                |
-| `GET /rotas/:id/passeios`              | Passeios feitos na rota                                                                |
-| `GET /passeios` · `POST /passeios`     | Feed paginado (`?autor=todos\|eu&limite=&antesDe=`) e registro (`petIds` opcional)     |
-| `GET / DELETE /passeios/:id`           | Detalhe; apagar só o autor                                                             |
-| `PUT / DELETE /passeios/:id/curtida`   | Curte ou descurte                                                                      |
+| Método e caminho                        | Descrição                                                                                           |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `POST /auth/cadastro`                   | Cria a conta do tutor (foto opcional em `fotoTutor`) e já devolve os tokens                         |
+| `POST /auth/login`                      | `{ email, password }` → `{ accessToken, tokenType, expiresEm, refreshToken, usuario }`              |
+| `POST /auth/refresh`                    | Troca o refresh token por um par novo (o antigo deixa de valer)                                     |
+| `GET /auth/me`                          | Usuário do token                                                                                    |
+| `POST /auth/logout`                     | Encerra a sessão (204)                                                                              |
+| `POST /auth/recuperar-senha`            | Envia o link de redefinição (sempre 202)                                                            |
+| `POST /auth/redefinir-senha`            | `{ token, password }` → troca a senha e derruba todas as sessões                                    |
+| `GET / PATCH / DELETE /perfil`          | Tutor (nome, foto, meta semanal) e pets; `DELETE` apaga a conta e tudo dela                         |
+| `PUT / DELETE /perfil/foto`             | Troca (`{ imagem: <data URL> }`) ou remove a foto do tutor                                          |
+| `POST /perfil/pets`                     | Adiciona um pet (até 10 por tutor)                                                                  |
+| `PATCH / DELETE /perfil/pets/:petId`    | Altera ou remove um pet                                                                             |
+| `PUT / DELETE /perfil/pets/:petId/foto` | Troca ou remove a foto de um pet                                                                    |
+| `GET /fotos/:id`                        | A imagem em si, pública e com cache imutável (para usar direto em `<img>`)                          |
+| `GET /perfil/resumo`                    | km da semana, total, passeios e encontros confirmados                                               |
+| `GET /encontros` · `POST /encontros`    | Lista (`?filtro=todos\|vou&periodo=futuros\|todos`) e cria                                          |
+| `GET / PATCH / DELETE /encontros/:id`   | Detalhe; alterar e apagar só o organizador                                                          |
+| `PUT / DELETE /encontros/:id/presenca`  | Confirma ou cancela presença                                                                        |
+| `GET /rotas` · `POST /rotas`            | Lista (`?filtro=todas\|favoritas`) e cria                                                           |
+| `GET / PATCH / DELETE /rotas/:id`       | Detalhe; alterar e apagar só o autor                                                                |
+| `PUT / DELETE /rotas/:id/favorita`      | Favorita ou desfavorita                                                                             |
+| `GET /rotas/:id/passeios`               | Passeios feitos na rota                                                                             |
+| `GET /passeios` · `POST /passeios`      | Feed paginado (`?autor=todos\|eu&limite=&antesDe=`) e registro (`petIds` e até 4 `fotos` opcionais) |
+| `GET / PATCH / DELETE /passeios/:id`    | Detalhe; alterar (texto, duração, `fotos`) e apagar só o autor                                      |
+| `PUT / DELETE /passeios/:id/curtida`    | Curte ou descurte                                                                                   |
 
 Tudo, fora cadastro, login, refresh e recuperação de senha, exige
 `Authorization: Bearer <accessToken>`. Os formatos de `Encontro`, `Rota`, `Passeio` e `Perfil`

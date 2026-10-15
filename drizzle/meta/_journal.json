@@ -22,6 +22,13 @@
       "when": 1792082516520,
       "tag": "0002_remove_meta_do_pet",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792090124582,
+      "tag": "0003_fotos_do_passeio",
+      "breakpoints": true
     }
   ]
 }

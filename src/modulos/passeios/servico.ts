@@ -1,7 +1,7 @@
 import { and, desc, eq, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Banco } from '../../db/cliente.js';
-import { curtidas, passeioPets, passeios, pets, usuarios } from '../../db/schema.js';
+import { curtidas, passeioFotos, passeioPets, passeios, pets, usuarios } from '../../db/schema.js';
 import { naoEncontrado } from '../../erros.js';
 import { dataIso, idNumerico, latLng } from '../../esquemas.js';
 import { urlFoto } from '../fotos/servico.js';
@@ -32,6 +32,7 @@ export const esquemaPasseio = z
     distanciaKm: z.number().describe('Calculada no servidor a partir dos pontos'),
     duracaoMin: z.number().int(),
     texto: z.string(),
+    fotos: z.array(z.string()).describe('Caminhos das fotos do passeio na API, na ordem'),
     curtidas: z.number().int(),
     curtido: z.boolean().describe('Se o usuário da requisição curtiu'),
     meu: z.boolean(),
@@ -96,6 +97,10 @@ function colunas(usuarioId: string) {
     distanciaKm: passeios.distanciaKm,
     duracaoMin: passeios.duracaoMin,
     texto: passeios.texto,
+    fotos:
+      sql`coalesce((select json_agg(${passeioFotos.fotoId} order by ${passeioFotos.ordem}) from ${passeioFotos} where ${passeioFotos.passeioId} = ${passeios.id}), '[]'::json)`.mapWith(
+        (valor) => lerJson<string[]>(valor),
+      ),
     curtidas:
       sql<number>`(select count(*) from ${curtidas} where ${curtidas.passeioId} = ${passeios.id})`.mapWith(
         Number,
@@ -122,6 +127,7 @@ const paraPasseio = (linha: Linha): Passeio => ({
   ...linha,
   pets: linha.pets.map((pet): PetDoPasseio => ({ ...pet, foto: urlFoto(pet.foto) })),
   fotoTutor: urlFoto(linha.fotoTutor),
+  fotos: linha.fotos.map((id) => urlFoto(id)!),
   data: linha.data.toISOString(),
 });
 

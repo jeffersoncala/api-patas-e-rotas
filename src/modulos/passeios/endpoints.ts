@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { autenticar, usuarioDe } from '../../autenticacao.js';
-import { curtidas, passeioPets, passeios, pets, rotas } from '../../db/schema.js';
+import { curtidas, passeioFotos, passeioPets, passeios, pets, rotas } from '../../db/schema.js';
 import { ErroApi, naoEncontrado, proibido } from '../../erros.js';
 import {
   dataIso,
@@ -15,6 +15,7 @@ import {
   trajeto,
 } from '../../esquemas.js';
 import { distanciaTrajeto } from '../../geo.js';
+import { apagarFotos, esquemaImagem, salvarFoto } from '../fotos/servico.js';
 import {
   buscarPasseio,
   esquemaCursor,
@@ -25,6 +26,24 @@ import {
 } from './servico.js';
 
 const PASSEIO_LIVRE = 'Passeio livre';
+
+export const MAX_FOTOS_PASSEIO = 4;
+
+/**
+ * Trajeto e fotos vêm no mesmo corpo. Fica abaixo dos 4,5 MB que a Vercel aceita; o front
+ * reduz as fotos, então quatro delas cabem com folga.
+ */
+const LIMITE_CORPO_PASSEIO = 4_000_000;
+
+/** Foto que o passeio já tem, pelo caminho que a API devolve; vira o id. */
+const fotoExistente = z
+  .string()
+  .regex(/^\/fotos\/[0-9a-f-]{36}$/i, 'Caminho de foto inválido')
+  .transform((caminho) => ({ id: caminho.slice('/fotos/'.length).toLowerCase() }));
+
+const esquemaFotos = z
+  .array(esquemaImagem)
+  .max(MAX_FOTOS_PASSEIO, `Envie no máximo ${MAX_FOTOS_PASSEIO} fotos`);
 
 export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
   app.addHook('onRequest', autenticar);
@@ -82,6 +101,7 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/',
     {
+      bodyLimit: LIMITE_CORPO_PASSEIO,
       schema: {
         tags: ['passeios'],
         summary: 'Registra um passeio (livre ou numa rota); a distância é calculada aqui',
@@ -100,13 +120,14 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
             .max(20)
             .optional()
             .describe('Pets do tutor que foram no passeio; sem o campo, vão todos'),
+          fotos: esquemaFotos.default([]).describe('Fotos do passeio, na ordem em que aparecem'),
         }),
         response: { 201: esquemaPasseio, ...erros(400, 401) },
       },
     },
     async (req, reply) => {
       const { id: usuarioId } = usuarioDe(req);
-      const { pontos, duracaoMin, texto, rotaId, petIds } = req.body;
+      const { pontos, duracaoMin, texto, rotaId, petIds, fotos } = req.body;
 
       const meusPets = await app.banco
         .select({ id: pets.id })
@@ -149,9 +170,85 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
             .insert(passeioPets)
             .values(petsDoPasseio.map((petId) => ({ passeioId: criado!.id, petId })));
         }
+        for (const [ordem, imagem] of fotos.entries()) {
+          const fotoId = await salvarFoto(tx, usuarioId, imagem);
+          await tx.insert(passeioFotos).values({ passeioId: criado!.id, fotoId, ordem });
+        }
         return criado!.id;
       });
       return reply.status(201).send(await buscarPasseio(app.banco, usuarioId, id));
+    },
+  );
+
+  app.patch(
+    '/:id',
+    {
+      bodyLimit: LIMITE_CORPO_PASSEIO,
+      schema: {
+        tags: ['passeios'],
+        summary: 'Atualiza só os campos enviados (só quem registrou)',
+        security: seguranca,
+        params: paramId,
+        body: z
+          .object({
+            duracaoMin: z.number().int().min(1).max(1440),
+            texto: z.string().trim().max(500),
+            fotos: z
+              .array(z.union([fotoExistente, esquemaImagem]))
+              .max(MAX_FOTOS_PASSEIO, `Envie no máximo ${MAX_FOTOS_PASSEIO} fotos`)
+              .describe(
+                'Lista final, na ordem: caminhos (`/fotos/<id>`) das que ficam e data URLs das novas',
+              ),
+          })
+          .partial(),
+        response: { 200: esquemaPasseio, ...erros(400, 401, 403, 404) },
+      },
+    },
+    async (req) => {
+      const { id: usuarioId } = usuarioDe(req);
+      const { id } = req.params;
+      if ((await autorDoPasseio(id)) !== usuarioId) {
+        throw proibido('Só quem registrou pode alterar o passeio');
+      }
+      const { fotos, ...campos } = req.body;
+
+      await app.banco.transaction(async (tx) => {
+        if (Object.keys(campos).length) {
+          await tx.update(passeios).set(campos).where(eq(passeios.id, id));
+        }
+        if (!fotos) return;
+
+        const atuais = await tx
+          .select({ id: passeioFotos.fotoId })
+          .from(passeioFotos)
+          .where(eq(passeioFotos.passeioId, id));
+        const idsAtuais = new Set(atuais.map((f) => f.id));
+        const mantidas = new Set<string>();
+        const final: string[] = [];
+        for (const foto of fotos) {
+          if ('id' in foto) {
+            if (!idsAtuais.has(foto.id) || mantidas.has(foto.id)) {
+              throw new ErroApi(400, 'Dados inválidos', { fotos: 'Foto não é deste passeio' });
+            }
+            mantidas.add(foto.id);
+            final.push(foto.id);
+          } else {
+            final.push(await salvarFoto(tx, usuarioId, foto));
+          }
+        }
+
+        await tx.delete(passeioFotos).where(eq(passeioFotos.passeioId, id));
+        if (final.length) {
+          await tx
+            .insert(passeioFotos)
+            .values(final.map((fotoId, ordem) => ({ passeioId: id, fotoId, ordem })));
+        }
+        await apagarFotos(
+          tx,
+          [...idsAtuais].filter((f) => !mantidas.has(f)),
+        );
+      });
+      return buscarPasseio(app.banco, usuarioId, id);
     },
   );
 
@@ -160,7 +257,7 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         tags: ['passeios'],
-        summary: 'Apaga um passeio (só quem registrou)',
+        summary: 'Apaga um passeio e as fotos dele (só quem registrou)',
         security: seguranca,
         params: paramId,
         response: { 204: semConteudo, ...erros(400, 401, 403, 404) },
@@ -171,7 +268,17 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
       if ((await autorDoPasseio(id)) !== usuarioDe(req).id) {
         throw proibido('Só quem registrou pode apagar o passeio');
       }
-      await app.banco.delete(passeios).where(eq(passeios.id, id));
+      await app.banco.transaction(async (tx) => {
+        const fotos = await tx
+          .select({ id: passeioFotos.fotoId })
+          .from(passeioFotos)
+          .where(eq(passeioFotos.passeioId, id));
+        await tx.delete(passeios).where(eq(passeios.id, id));
+        await apagarFotos(
+          tx,
+          fotos.map((f) => f.id),
+        );
+      });
       return reply.status(204).send(null);
     },
   );

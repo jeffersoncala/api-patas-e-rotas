@@ -203,6 +203,21 @@ export const passeioPets = pgTable(
   ],
 ).enableRLS();
 
+/** Fotos de cada passeio, na ordem em que o tutor escolheu. */
+export const passeioFotos = pgTable(
+  'passeio_fotos',
+  {
+    passeioId: integer('passeio_id')
+      .notNull()
+      .references(() => passeios.id, { onDelete: 'cascade' }),
+    fotoId: uuid('foto_id')
+      .notNull()
+      .references(() => fotos.id, { onDelete: 'cascade' }),
+    ordem: integer('ordem').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.passeioId, t.ordem] })],
+).enableRLS();
+
 export const curtidas = pgTable(
   'curtidas',
   {
