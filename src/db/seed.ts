@@ -7,6 +7,7 @@ import {
   curtidas,
   encontros,
   favoritas,
+  passeioPets,
   passeios,
   pets,
   presencas,
@@ -249,9 +250,15 @@ await banco.transaction(async (tx) => {
   }
 
   const criados: Usuario[] = [];
+  /** Id do pet de cada tutor, para ligar aos passeios. */
+  const petDe = new Map<string, number>();
   for (const { email, tutor, pet, ...doPet } of TUTORES) {
     const [u] = await tx.insert(usuarios).values({ email, tutor, senhaHash }).returning();
-    await tx.insert(pets).values({ usuarioId: u!.id, nome: pet, ...doPet });
+    const [p] = await tx
+      .insert(pets)
+      .values({ usuarioId: u!.id, nome: pet, ...doPet })
+      .returning({ id: pets.id });
+    petDe.set(u!.id, p!.id);
     criados.push(u!);
   }
   const [ana, rafael, julia, jeff] = criados as [Usuario, Usuario, Usuario, Usuario];
@@ -402,6 +409,7 @@ await banco.transaction(async (tx) => {
         data,
       })
       .returning();
+    await tx.insert(passeioPets).values({ passeioId: p!.id, petId: petDe.get(autor.id)! });
     for (const u of curtiram) {
       await tx.insert(curtidas).values({ passeioId: p!.id, usuarioId: u.id });
     }

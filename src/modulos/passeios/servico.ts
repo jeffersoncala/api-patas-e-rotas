@@ -1,16 +1,30 @@
 import { and, desc, eq, lt, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Banco } from '../../db/cliente.js';
-import { curtidas, passeios, pets, usuarios } from '../../db/schema.js';
+import { curtidas, passeioPets, passeios, pets, usuarios } from '../../db/schema.js';
 import { naoEncontrado } from '../../erros.js';
 import { dataIso, idNumerico, latLng } from '../../esquemas.js';
+import { urlFoto } from '../fotos/servico.js';
+
+const esquemaPetDoPasseio = z
+  .object({
+    id: z.number().int(),
+    nome: z.string(),
+    foto: z.string().nullable().describe('Caminho da foto na API, ou null'),
+  })
+  .meta({ id: 'PetDoPasseio' });
+
+type PetDoPasseio = z.infer<typeof esquemaPetDoPasseio>;
 
 /** Mesmo formato do `Passeio` do front. */
 export const esquemaPasseio = z
   .object({
     id: z.number().int(),
-    pet: z.string().describe('Nome do pet de quem registrou'),
+    pets: z
+      .array(esquemaPetDoPasseio)
+      .describe('Pets que foram no passeio; vazio se todos já foram removidos do perfil'),
     tutor: z.string(),
+    fotoTutor: z.string().nullable().describe('Caminho da foto do tutor na API, ou null'),
     data: dataIso,
     rotaId: z.number().int().nullable().describe('null em passeio livre ou se a rota foi apagada'),
     rotaNome: z.string(),
@@ -59,15 +73,22 @@ const cursorDe = (p: Passeio) => `${Date.parse(p.data)}.${p.id}`;
 
 export const esquemaLimite = z.coerce.number().int().min(1).max(50).default(20);
 
+/** O PGlite já devolve o JSON interpretado; outros drivers podem devolver texto. */
+const lerJson = <T>(valor: unknown): T =>
+  (typeof valor === 'string' ? JSON.parse(valor) : valor) as T;
+
 /**
- * Colunas do `Passeio` já com curtidas agregadas por subconsulta correlacionada
+ * Colunas do `Passeio` já com pets e curtidas agregados por subconsulta correlacionada
  * (uma consulta só para a lista inteira, sem N+1).
  */
 function colunas(usuarioId: string) {
   return {
     id: passeios.id,
-    pet: sql<string>`coalesce(${pets.nome}, '')`,
+    pets: sql`coalesce((select json_agg(json_build_object('id', ${pets.id}, 'nome', ${pets.nome}, 'foto', ${pets.fotoId}) order by ${pets.id}) from ${passeioPets} inner join ${pets} on ${pets.id} = ${passeioPets.petId} where ${passeioPets.passeioId} = ${passeios.id}), '[]'::json)`.mapWith(
+      (valor) => lerJson<{ id: number; nome: string; foto: string | null }[]>(valor),
+    ),
     tutor: usuarios.tutor,
+    fotoTutor: usuarios.fotoId,
     data: passeios.data,
     rotaId: passeios.rotaId,
     rotaNome: passeios.rotaNome,
@@ -92,13 +113,17 @@ function consultar(banco: Banco, usuarioId: string, filtro: SQL | undefined) {
     .select(colunas(usuarioId))
     .from(passeios)
     .innerJoin(usuarios, eq(usuarios.id, passeios.usuarioId))
-    .leftJoin(pets, eq(pets.usuarioId, passeios.usuarioId))
     .where(filtro);
 }
 
 type Linha = Awaited<ReturnType<typeof consultar>>[number];
 
-const paraPasseio = (linha: Linha): Passeio => ({ ...linha, data: linha.data.toISOString() });
+const paraPasseio = (linha: Linha): Passeio => ({
+  ...linha,
+  pets: linha.pets.map((pet): PetDoPasseio => ({ ...pet, foto: urlFoto(pet.foto) })),
+  fotoTutor: urlFoto(linha.fotoTutor),
+  data: linha.data.toISOString(),
+});
 
 export interface FiltroPasseios {
   limite: number;

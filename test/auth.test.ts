@@ -11,9 +11,6 @@ describe('auth', () => {
         email: '  Ana@Exemplo.com ',
         password: 'segredo123',
         tutor: 'Ana',
-        pet: 'Mel',
-        especie: 'cachorro',
-        porte: 'pequeno',
       },
     });
 
@@ -28,6 +25,38 @@ describe('auth', () => {
     expect(JSON.stringify(corpo)).not.toMatch(/senha|scrypt/i);
   });
 
+  it('cadastra só o tutor, opcionalmente com foto; os pets vêm depois', async () => {
+    const { app } = await criarAppTeste();
+    const png =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const { headers } = await cadastrar(app, { fotoTutor: png, pet: null });
+
+    const perfil = (await app.inject({ url: '/perfil', headers })).json();
+    expect(perfil.pets).toEqual([]);
+    expect(perfil.foto).toMatch(/^\/fotos\//);
+    expect((await app.inject({ url: perfil.foto })).statusCode).toBe(200);
+
+    // Foto inválida não deixa conta criada pela metade.
+    const invalida = await app.inject({
+      method: 'POST',
+      url: '/auth/cadastro',
+      payload: {
+        email: 'meio@exemplo.com',
+        password: 'segredo123',
+        tutor: 'Meio',
+        fotoTutor: 'data:image/png;base64,AAAA',
+      },
+    });
+    expect(invalida.statusCode).toBe(400);
+    expect(invalida.json().campos).toHaveProperty('fotoTutor');
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email: 'meio@exemplo.com', password: 'segredo123' },
+    });
+    expect(login.statusCode).toBe(401);
+  });
+
   it('recusa e-mail repetido com 409', async () => {
     const { app } = await criarAppTeste();
     await cadastrar(app, { email: 'dup@exemplo.com' });
@@ -38,9 +67,6 @@ describe('auth', () => {
         email: 'DUP@exemplo.com',
         password: 'outrasenha',
         tutor: 'Outro',
-        pet: 'Rex',
-        especie: 'gato',
-        porte: 'grande',
       },
     });
     expect(resposta.statusCode).toBe(409);
@@ -58,7 +84,7 @@ describe('auth', () => {
     const corpo = resposta.json();
     expect(corpo).toMatchObject({ status: 400, erro: 'Bad Request', mensagem: 'Dados inválidos' });
     expect(Object.keys(corpo.campos)).toEqual(
-      expect.arrayContaining(['email', 'password', 'tutor', 'pet', 'especie', 'porte']),
+      expect.arrayContaining(['email', 'password', 'tutor']),
     );
   });
 

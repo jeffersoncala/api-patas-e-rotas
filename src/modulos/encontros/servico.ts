@@ -48,7 +48,9 @@ function consultar(banco: Banco, usuarioId: string, onde?: SQL) {
       data: encontros.data,
       organizadorId: encontros.organizadorId,
       tutor: usuarios.tutor,
-      pet: pets.nome,
+      pets: sql`(select json_agg(${pets.nome} order by ${pets.id}) from ${pets} where ${pets.usuarioId} = ${encontros.organizadorId})`.mapWith(
+        (valor) => (typeof valor === 'string' ? JSON.parse(valor) : valor) as string[] | null,
+      ),
       confirmados:
         sql<number>`(select count(*) from ${presencas} where ${presencas.encontroId} = ${encontros.id})`.mapWith(
           Number,
@@ -57,12 +59,16 @@ function consultar(banco: Banco, usuarioId: string, onde?: SQL) {
     })
     .from(encontros)
     .innerJoin(usuarios, eq(usuarios.id, encontros.organizadorId))
-    .leftJoin(pets, eq(pets.usuarioId, encontros.organizadorId))
     .where(onde)
     .orderBy(asc(encontros.data), asc(encontros.id));
 }
 
 type Linha = Awaited<ReturnType<typeof consultar>>[number];
+
+/** "Ana", "Ana e Mel", "Ana, Mel e Thor". */
+function juntarNomes(nomes: string[]): string {
+  return nomes.length < 2 ? (nomes[0] ?? '') : `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}`;
+}
 
 /** Mesmo formato do `Encontro` do front. */
 function formatar(usuarioId: string, linha: Linha) {
@@ -75,7 +81,7 @@ function formatar(usuarioId: string, linha: Linha) {
     data: linha.data.toISOString(),
     confirmados: linha.confirmados,
     vou: linha.vou,
-    organizador: linha.pet ? `${linha.tutor} e ${linha.pet}` : linha.tutor,
+    organizador: juntarNomes([linha.tutor, ...(linha.pets ?? [])]),
     organizadorId: linha.organizadorId,
     meu: linha.organizadorId === usuarioId,
   };

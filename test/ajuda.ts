@@ -50,20 +50,28 @@ export async function criarAppTeste() {
 
 let sequencia = 0;
 
-/** Cadastra um tutor e devolve o header de autorização pronto para usar no `inject`. */
+/**
+ * Cadastra um tutor (com um pet, adicionado pelo perfil como faria o front) e devolve
+ * o header de autorização pronto para usar no `inject`.
+ */
 export async function cadastrar(
   app: App,
-  dados: Partial<{ email: string; tutor: string; pet: string; password: string }> = {},
+  dados: Partial<{
+    email: string;
+    tutor: string;
+    /** Nome do pet criado logo depois pelo perfil; `null` para ficar sem pet. */
+    pet: string | null;
+    password: string;
+    fotoTutor: string;
+  }> = {},
 ) {
   sequencia++;
+  const { pet = `Pet ${sequencia}`, ...doTutor } = dados;
   const corpo = {
     email: `tutor${sequencia}@exemplo.com`,
     password: 'segredo123',
     tutor: `Tutor ${sequencia}`,
-    pet: `Pet ${sequencia}`,
-    especie: 'cachorro',
-    porte: 'medio',
-    ...dados,
+    ...doTutor,
   };
   const resposta = await app.inject({ method: 'POST', url: '/auth/cadastro', payload: corpo });
   if (resposta.statusCode !== 201) {
@@ -74,9 +82,17 @@ export async function cadastrar(
     refreshToken: string;
     usuario: { id: string };
   }>();
-  return {
-    ...login,
-    corpo,
-    headers: { authorization: `Bearer ${login.accessToken}` },
-  };
+  const headers = { authorization: `Bearer ${login.accessToken}` };
+  if (pet !== null) {
+    const criado = await app.inject({
+      method: 'POST',
+      url: '/perfil/pets',
+      headers,
+      payload: { nome: pet, especie: 'cachorro', porte: 'medio' },
+    });
+    if (criado.statusCode !== 201) {
+      throw new Error(`Pet não foi criado (${criado.statusCode}): ${criado.body}`);
+    }
+  }
+  return { ...login, corpo, headers };
 }

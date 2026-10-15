@@ -59,6 +59,16 @@ describe('encontros', () => {
     const visto = await app.inject({ url: `/encontros/${encontro.id}`, headers: outro.headers });
     expect(visto.statusCode).toBe(200);
     expect(visto.json()).toMatchObject({ confirmados: 1, vou: false, meu: false });
+
+    // Com mais de um pet, todos entram no nome do organizador.
+    await app.inject({
+      method: 'POST',
+      url: '/perfil/pets',
+      headers,
+      payload: { nome: 'Thor', especie: 'cachorro', porte: 'grande' },
+    });
+    const comDois = await app.inject({ url: `/encontros/${encontro.id}`, headers });
+    expect(comDois.json().organizador).toBe('Ana, Mel e Thor');
   });
 
   it('valida data no passado, posição e título', async () => {

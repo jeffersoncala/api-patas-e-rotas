@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { autenticar, usuarioDe } from '../../autenticacao.js';
-import { curtidas, passeios, rotas } from '../../db/schema.js';
+import { curtidas, passeioPets, passeios, pets, rotas } from '../../db/schema.js';
 import { ErroApi, naoEncontrado, proibido } from '../../erros.js';
 import {
   dataIso,
@@ -94,13 +94,29 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
           rotaNome: textoObrigatorio(60)
             .optional()
             .describe(`Só quando não há rotaId; padrão "${PASSEIO_LIVRE}"`),
+          petIds: z
+            .array(idNumerico)
+            .min(1)
+            .max(20)
+            .optional()
+            .describe('Pets do tutor que foram no passeio; sem o campo, vão todos'),
         }),
         response: { 201: esquemaPasseio, ...erros(400, 401) },
       },
     },
     async (req, reply) => {
       const { id: usuarioId } = usuarioDe(req);
-      const { pontos, duracaoMin, texto, rotaId } = req.body;
+      const { pontos, duracaoMin, texto, rotaId, petIds } = req.body;
+
+      const meusPets = await app.banco
+        .select({ id: pets.id })
+        .from(pets)
+        .where(eq(pets.usuarioId, usuarioId));
+      const idsMeus = new Set(meusPets.map((p) => p.id));
+      if (petIds?.some((id) => !idsMeus.has(id))) {
+        throw new ErroApi(400, 'Dados inválidos', { petIds: 'Escolha só pets do seu perfil' });
+      }
+      const petsDoPasseio = petIds ? [...new Set(petIds)] : [...idsMeus];
 
       let rotaNome = req.body.rotaNome ?? PASSEIO_LIVRE;
       if (rotaId !== undefined) {
@@ -114,20 +130,28 @@ export const passeiosEndpoints: FastifyPluginAsyncZod = async (app) => {
         rotaNome = rota.nome;
       }
 
-      const [criado] = await app.banco
-        .insert(passeios)
-        .values({
-          usuarioId,
-          rotaId: rotaId ?? null,
-          rotaNome,
-          pontos,
-          distanciaKm: distanciaTrajeto(pontos),
-          duracaoMin,
-          texto,
-          data: new Date(),
-        })
-        .returning({ id: passeios.id });
-      return reply.status(201).send(await buscarPasseio(app.banco, usuarioId, criado!.id));
+      const id = await app.banco.transaction(async (tx) => {
+        const [criado] = await tx
+          .insert(passeios)
+          .values({
+            usuarioId,
+            rotaId: rotaId ?? null,
+            rotaNome,
+            pontos,
+            distanciaKm: distanciaTrajeto(pontos),
+            duracaoMin,
+            texto,
+            data: new Date(),
+          })
+          .returning({ id: passeios.id });
+        if (petsDoPasseio.length) {
+          await tx
+            .insert(passeioPets)
+            .values(petsDoPasseio.map((petId) => ({ passeioId: criado!.id, petId })));
+        }
+        return criado!.id;
+      });
+      return reply.status(201).send(await buscarPasseio(app.banco, usuarioId, id));
     },
   );
 

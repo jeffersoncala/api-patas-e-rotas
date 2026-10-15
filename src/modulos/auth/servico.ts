@@ -1,7 +1,8 @@
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { pets, redefinicoesSenha, sessoes, usuarios } from '../../db/schema.js';
+import { redefinicoesSenha, sessoes, usuarios } from '../../db/schema.js';
 import { ErroApi, naoAutorizado } from '../../erros.js';
+import { salvarFoto, type Imagem } from '../fotos/servico.js';
 import { conferirSenha, gerarHashSenha } from './senha.js';
 import { gerarTokenOpaco, hashToken } from './tokens.js';
 
@@ -18,9 +19,7 @@ export interface DadosCadastro {
   email: string;
   password: string;
   tutor: string;
-  pet: string;
-  especie: (typeof pets.$inferInsert)['especie'];
-  porte: (typeof pets.$inferInsert)['porte'];
+  fotoTutor?: Imagem | undefined;
 }
 
 type Usuario = typeof usuarios.$inferSelect;
@@ -56,12 +55,11 @@ export class AuthServico {
         .insert(usuarios)
         .values({ email: dados.email, senhaHash, tutor: dados.tutor })
         .returning();
-      await tx.insert(pets).values({
-        usuarioId: criado!.id,
-        nome: dados.pet,
-        especie: dados.especie,
-        porte: dados.porte,
-      });
+      const id = criado!.id;
+      if (dados.fotoTutor) {
+        const fotoId = await salvarFoto(tx, id, dados.fotoTutor);
+        await tx.update(usuarios).set({ fotoId }).where(eq(usuarios.id, id));
+      }
       return criado!;
     });
     return this.abrirSessao(usuario);

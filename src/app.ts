@@ -20,6 +20,7 @@ import { CUSTO_PADRAO, CUSTO_TESTE } from './modulos/auth/senha.js';
 import { Tokens } from './modulos/auth/tokens.js';
 import { authEndpoints } from './modulos/auth/endpoints.js';
 import { encontrosEndpoints } from './modulos/encontros/endpoints.js';
+import { fotosEndpoints } from './modulos/fotos/endpoints.js';
 import { passeiosEndpoints } from './modulos/passeios/endpoints.js';
 import { perfilEndpoints } from './modulos/perfil/endpoints.js';
 import { rotasEndpoints } from './modulos/rotas/endpoints.js';
@@ -92,7 +93,8 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
       },
       tags: [
         { name: 'auth', description: 'Cadastro, login e sessão' },
-        { name: 'perfil', description: 'Dados do tutor e do pet' },
+        { name: 'perfil', description: 'Dados do tutor e dos pets' },
+        { name: 'fotos', description: 'Fotos do tutor e dos pets' },
         { name: 'encontros', description: 'Encontros entre pets' },
         { name: 'rotas', description: 'Rotas de passeio' },
         { name: 'passeios', description: 'Passeios registrados e feed' },
@@ -107,6 +109,7 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
 
   await app.register(authEndpoints, { prefix: '/auth' });
   await app.register(perfilEndpoints, { prefix: '/perfil' });
+  await app.register(fotosEndpoints, { prefix: '/fotos' });
   await app.register(encontrosEndpoints, { prefix: '/encontros' });
   await app.register(rotasEndpoints, { prefix: '/rotas' });
   await app.register(passeiosEndpoints, { prefix: '/passeios' });

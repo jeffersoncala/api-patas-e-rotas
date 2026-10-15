@@ -63,14 +63,19 @@ schemas Zod que validam as requisições. Resumo:
 
 | Método e caminho                       | Descrição                                                                              |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
-| `POST /auth/cadastro`                  | Cria conta + pet e já devolve os tokens                                                |
+| `POST /auth/cadastro`                  | Cria a conta do tutor (foto opcional em `fotoTutor`) e já devolve os tokens            |
 | `POST /auth/login`                     | `{ email, password }` → `{ accessToken, tokenType, expiresEm, refreshToken, usuario }` |
 | `POST /auth/refresh`                   | Troca o refresh token por um par novo (o antigo deixa de valer)                        |
 | `GET /auth/me`                         | Usuário do token                                                                       |
 | `POST /auth/logout`                    | Encerra a sessão (204)                                                                 |
 | `POST /auth/recuperar-senha`           | Envia o link de redefinição (sempre 202)                                               |
 | `POST /auth/redefinir-senha`           | `{ token, password }` → troca a senha e derruba todas as sessões                       |
-| `GET / PATCH / DELETE /perfil`         | Dados do tutor e do pet; `DELETE` apaga a conta e tudo dela                            |
+| `GET / PATCH / DELETE /perfil`         | Tutor (nome, foto, meta semanal) e pets; `DELETE` apaga a conta e tudo dela            |
+| `PUT / DELETE /perfil/foto`            | Troca (`{ imagem: <data URL> }`) ou remove a foto do tutor                             |
+| `POST /perfil/pets`                    | Adiciona um pet (até 10 por tutor)                                                     |
+| `PATCH / DELETE /perfil/pets/:petId`   | Altera ou remove um pet                                                                |
+| `PUT / DELETE /perfil/pets/:petId/foto` | Troca ou remove a foto de um pet                                                      |
+| `GET /fotos/:id`                       | A imagem em si, pública e com cache imutável (para usar direto em `<img>`)             |
 | `GET /perfil/resumo`                   | km da semana, total, passeios e encontros confirmados                                  |
 | `GET /encontros` · `POST /encontros`   | Lista (`?filtro=todos\|vou&periodo=futuros\|todos`) e cria                             |
 | `GET / PATCH / DELETE /encontros/:id`  | Detalhe; alterar e apagar só o organizador                                             |
@@ -79,7 +84,7 @@ schemas Zod que validam as requisições. Resumo:
 | `GET / PATCH / DELETE /rotas/:id`      | Detalhe; alterar e apagar só o autor                                                   |
 | `PUT / DELETE /rotas/:id/favorita`     | Favorita ou desfavorita                                                                |
 | `GET /rotas/:id/passeios`              | Passeios feitos na rota                                                                |
-| `GET /passeios` · `POST /passeios`     | Feed paginado (`?autor=todos\|eu&limite=&antesDe=`) e registro                         |
+| `GET /passeios` · `POST /passeios`     | Feed paginado (`?autor=todos\|eu&limite=&antesDe=`) e registro (`petIds` opcional)     |
 | `GET / DELETE /passeios/:id`           | Detalhe; apagar só o autor                                                             |
 | `PUT / DELETE /passeios/:id/curtida`   | Curte ou descurte                                                                      |
 
@@ -120,6 +125,9 @@ Mesmo corpo da API Java, para o front não precisar tratar dois formatos:
 - **Refresh token opaco e rotativo**, guardado só como hash (SHA-256). Cada uso gera um novo.
 - **Senhas com scrypt** (`node:crypto`, N=2^16, r=8), sem dependência nativa extra.
 - **Distâncias sempre calculadas no servidor** a partir dos pontos do trajeto.
+- **Fotos no próprio Postgres** (tabela `fotos`, em base64), para não depender de outro serviço.
+  O front reduz a imagem para 512 px antes de enviar; a API aceita JPEG, PNG e WebP de até
+  1,5 MB e confere os primeiros bytes do arquivo. Toda mudança no perfil devolve o perfil inteiro.
 - **Sem vazamento de conta:** login de e-mail inexistente leva o mesmo tempo, e a recuperação de
   senha responde igual exista a conta ou não.
 

@@ -22,6 +22,7 @@ export type LatLng = [number, number];
 
 export const ESPECIES = ['cachorro', 'gato', 'outro'] as const;
 export const PORTES = ['pequeno', 'medio', 'grande'] as const;
+export const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 const instante = (nome: string) => timestamp(nome, { withTimezone: true, mode: 'date' });
 
@@ -36,28 +37,54 @@ const refUsuario = (nome: string) =>
     .notNull()
     .references((): AnyPgColumn => usuarios.id, { onDelete: 'cascade' });
 
+/** Foto do tutor ou de um pet; se a foto for apagada, quem a usava fica sem. */
+const refFoto = () =>
+  uuid('foto_id').references((): AnyPgColumn => fotos.id, { onDelete: 'set null' });
+
 export const usuarios = pgTable('usuarios', {
   id: uuid('id').primaryKey().defaultRandom(),
   /** Sempre em minúsculas e sem espaços (normalizado na entrada). */
   email: text('email').notNull().unique(),
   senhaHash: text('senha_hash').notNull(),
   tutor: text('tutor').notNull(),
+  fotoId: refFoto(),
+  metaSemanalKm: doublePrecision('meta_semanal_km').notNull().default(15),
   criadoEm: criadoEm(),
   ultimoAcessoEm: instante('ultimo_acesso_em'),
 }).enableRLS();
 
-/** Um pet por usuário por enquanto (é o que o front suporta); a tabela já permite mais. */
-export const pets = pgTable('pets', {
-  id: idSerial(),
-  usuarioId: refUsuario('usuario_id').unique(),
-  nome: text('nome').notNull(),
-  especie: text('especie', { enum: ESPECIES }).notNull(),
-  raca: text('raca').notNull().default(''),
-  idadeAnos: integer('idade_anos').notNull().default(1),
-  porte: text('porte', { enum: PORTES }).notNull(),
-  bio: text('bio').notNull().default(''),
-  metaSemanalKm: doublePrecision('meta_semanal_km').notNull().default(15),
-}).enableRLS();
+export const pets = pgTable(
+  'pets',
+  {
+    id: idSerial(),
+    usuarioId: refUsuario('usuario_id'),
+    nome: text('nome').notNull(),
+    especie: text('especie', { enum: ESPECIES }).notNull(),
+    raca: text('raca').notNull().default(''),
+    idadeAnos: integer('idade_anos').notNull().default(1),
+    porte: text('porte', { enum: PORTES }).notNull(),
+    bio: text('bio').notNull().default(''),
+    fotoId: refFoto(),
+  },
+  (t) => [index('pets_usuario_idx').on(t.usuarioId)],
+).enableRLS();
+
+/**
+ * Imagens já reduzidas pelo front, em base64. Ficam no Postgres para não depender de outro
+ * serviço; são servidas em `GET /fotos/:id` sem autenticação (o id é um UUID aleatório) e
+ * nunca mudam: trocar a foto cria outra linha e apaga a antiga.
+ */
+export const fotos = pgTable(
+  'fotos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    usuarioId: refUsuario('usuario_id'),
+    tipo: text('tipo', { enum: TIPOS_FOTO }).notNull(),
+    dados: text('dados').notNull(),
+    criadoEm: criadoEm(),
+  },
+  (t) => [index('fotos_usuario_idx').on(t.usuarioId)],
+).enableRLS();
 
 /**
  * Uma linha por login. O refresh token é guardado só como hash; a rotação troca o
@@ -156,6 +183,23 @@ export const passeios = pgTable(
     index('passeios_data_idx').on(t.data),
     index('passeios_usuario_idx').on(t.usuarioId),
     index('passeios_rota_idx').on(t.rotaId),
+  ],
+).enableRLS();
+
+/** Quais pets foram em cada passeio. */
+export const passeioPets = pgTable(
+  'passeio_pets',
+  {
+    passeioId: integer('passeio_id')
+      .notNull()
+      .references(() => passeios.id, { onDelete: 'cascade' }),
+    petId: integer('pet_id')
+      .notNull()
+      .references(() => pets.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.passeioId, t.petId] }),
+    index('passeio_pets_pet_idx').on(t.petId),
   ],
 ).enableRLS();
 

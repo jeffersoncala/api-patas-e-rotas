@@ -8,6 +8,20 @@
       "when": 1790864068192,
       "tag": "0000_inicial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792082498423,
+      "tag": "0001_fotos_e_varios_pets",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792082516520,
+      "tag": "0002_remove_meta_do_pet",
+      "breakpoints": true
     }
   ]
 }

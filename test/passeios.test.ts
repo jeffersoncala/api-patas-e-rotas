@@ -47,8 +47,9 @@ describe('passeios', () => {
     expect(resposta.statusCode).toBe(201);
     expect(resposta.json()).toEqual({
       id: expect.any(Number),
-      pet: 'Bolota',
+      pets: [{ id: expect.any(Number), nome: 'Bolota', foto: null }],
       tutor: 'Jeff',
+      fotoTutor: null,
       data: '2026-09-01T12:00:00.000Z',
       rotaId: null,
       rotaNome: 'Passeio livre',
@@ -63,6 +64,42 @@ describe('passeios', () => {
 
     const nomeado = await registrar(app, headers, { rotaNome: 'Volta no quarteirão' });
     expect(nomeado).toMatchObject({ rotaNome: 'Volta no quarteirão', rotaId: null });
+  });
+
+  it('liga o passeio aos pets escolhidos (todos, sem escolha) e recusa pet de outro tutor', async () => {
+    const { app } = await criarAppTeste();
+    const { headers } = await cadastrar(app, { pet: 'Bolota' });
+    const perfil = await app.inject({
+      method: 'POST',
+      url: '/perfil/pets',
+      headers,
+      payload: { nome: 'Mingau', especie: 'gato', porte: 'pequeno' },
+    });
+    const [bolota, mingau] = perfil.json<{ pets: { id: number }[] }>().pets;
+
+    const todos = await registrar(app, headers);
+    expect(todos).toMatchObject({
+      pets: [
+        { id: bolota!.id, nome: 'Bolota' },
+        { id: mingau!.id, nome: 'Mingau' },
+      ],
+    });
+    const soMingau = await registrar(app, headers, { petIds: [mingau!.id] });
+    expect(soMingau).toMatchObject({ pets: [{ id: mingau!.id, nome: 'Mingau' }] });
+
+    // Com dois pets o passeio continua aparecendo uma vez só no feed.
+    const feed = await app.inject({ url: '/passeios', headers });
+    expect(feed.json().itens).toHaveLength(2);
+
+    const outro = await cadastrar(app);
+    const alheio = await app.inject({
+      method: 'POST',
+      url: '/passeios',
+      headers: outro.headers,
+      payload: { pontos: PONTOS, duracaoMin: 10, petIds: [bolota!.id] },
+    });
+    expect(alheio.statusCode).toBe(400);
+    expect(alheio.json().campos).toEqual({ petIds: 'Escolha só pets do seu perfil' });
   });
 
   it('registra em uma rota copiando o nome dela; rota inexistente dá 400', async () => {

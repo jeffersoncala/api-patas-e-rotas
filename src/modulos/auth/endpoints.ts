@@ -1,8 +1,8 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { autenticar, usuarioDe } from '../../autenticacao.js';
-import { ESPECIES, PORTES } from '../../db/schema.js';
 import { dataIso, email, erros, semConteudo, seguranca, textoObrigatorio } from '../../esquemas.js';
+import { esquemaImagem, LIMITE_CORPO_FOTO } from '../fotos/servico.js';
 import { AuthServico, usuarioPublico } from './servico.js';
 
 /** Espaço pode fazer parte da senha, então ela não é aparada. */
@@ -39,18 +39,19 @@ export const authEndpoints: FastifyPluginAsyncZod = async (app) => {
     '/cadastro',
     {
       config: limite(5),
+      // Cabe a foto opcional.
+      bodyLimit: LIMITE_CORPO_FOTO,
       schema: {
         tags: ['auth'],
-        summary: 'Cria a conta do tutor e o perfil do pet, já com a sessão aberta',
+        summary:
+          'Cria a conta do tutor, já com a sessão aberta (os pets entram depois, pelo perfil)',
         body: z.object({
           email,
           password: senha,
           tutor: textoObrigatorio(80),
-          pet: textoObrigatorio(60),
-          especie: z.enum(ESPECIES),
-          porte: z.enum(PORTES),
+          fotoTutor: esquemaImagem.optional(),
         }),
-        response: { 201: esquemaLogin, ...erros(400, 409, 429) },
+        response: { 201: esquemaLogin, ...erros(400, 409, 413, 429) },
       },
     },
     async (req, reply) => reply.status(201).send(await servico.cadastrar(req.body)),
