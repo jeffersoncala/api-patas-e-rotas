@@ -3,11 +3,11 @@
 Backend do Patas & Rotas, uma rede social para pets marcarem encontros e registrarem passeios.
 Substitui a API Java anterior (`pataserotas-api`) e mantém o mesmo contrato de login.
 
-**Stack:** Node.js 22 · TypeScript 7 · Fastify 5 · Zod 4 · Drizzle ORM · PostgreSQL (Supabase) · jose (JWT) · Vitest 5
+**Stack:** Node.js 24 · TypeScript 7 · Fastify 5 · Zod 4 · Drizzle ORM · PostgreSQL (Supabase) · jose (JWT) · Vitest 5
 
 ## Como rodar
 
-Requisitos: Node.js 22.12 ou mais novo. O Postgres local vem pelo npm (PGlite); não precisa instalar nada.
+Requisitos: Node.js 24. O Postgres local vem pelo npm (PGlite); não precisa instalar nada.
 
 ```bash
 npm install
