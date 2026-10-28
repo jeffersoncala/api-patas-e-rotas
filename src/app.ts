@@ -19,6 +19,7 @@ import { enviarEmailNoLog, type EnviarEmail } from './email.js';
 import { CUSTO_PADRAO, CUSTO_TESTE } from './modulos/auth/senha.js';
 import { Tokens } from './modulos/auth/tokens.js';
 import { authEndpoints } from './modulos/auth/endpoints.js';
+import { desaparecidosEndpoints } from './modulos/desaparecidos/endpoints.js';
 import { encontrosEndpoints } from './modulos/encontros/endpoints.js';
 import { fotosEndpoints } from './modulos/fotos/endpoints.js';
 import { passeiosEndpoints } from './modulos/passeios/endpoints.js';
@@ -98,6 +99,7 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
         { name: 'encontros', description: 'Encontros entre pets' },
         { name: 'rotas', description: 'Rotas de passeio' },
         { name: 'passeios', description: 'Passeios registrados e feed' },
+        { name: 'desaparecidos', description: 'Pets desaparecidos por perto' },
       ],
     },
     transform: jsonSchemaTransform,
@@ -113,6 +115,7 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
   await app.register(encontrosEndpoints, { prefix: '/encontros' });
   await app.register(rotasEndpoints, { prefix: '/rotas' });
   await app.register(passeiosEndpoints, { prefix: '/passeios' });
+  await app.register(desaparecidosEndpoints, { prefix: '/desaparecidos' });
 
   return app;
 }

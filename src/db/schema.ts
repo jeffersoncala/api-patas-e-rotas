@@ -229,3 +229,32 @@ export const curtidas = pgTable(
   },
   (t) => [primaryKey({ columns: [t.passeioId, t.usuarioId] })],
 ).enableRLS();
+
+/**
+ * Pets desaparecidos, com o último lugar onde foram vistos. Quem cadastrou marca como
+ * encontrado (`encontrado_em`), e a partir daí ele sai da busca por raio.
+ */
+export const desaparecidos = pgTable(
+  'desaparecidos',
+  {
+    id: idSerial(),
+    usuarioId: refUsuario('usuario_id'),
+    nome: text('nome').notNull(),
+    especie: text('especie', { enum: ESPECIES }).notNull(),
+    raca: text('raca').notNull().default(''),
+    porte: text('porte', { enum: PORTES }).notNull(),
+    descricao: text('descricao').notNull().default(''),
+    /** Telefone, WhatsApp ou outro jeito de falar com o tutor. */
+    contato: text('contato').notNull(),
+    fotoId: refFoto(),
+    latitude: doublePrecision('latitude').notNull(),
+    longitude: doublePrecision('longitude').notNull(),
+    vistoEm: instante('visto_em').notNull(),
+    encontradoEm: instante('encontrado_em'),
+    criadoEm: criadoEm(),
+  },
+  (t) => [
+    index('desaparecidos_latitude_idx').on(t.latitude),
+    index('desaparecidos_usuario_idx').on(t.usuarioId),
+  ],
+).enableRLS();
