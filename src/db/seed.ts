@@ -4,6 +4,9 @@ import { distanciaTrajeto } from '../geo.js';
 import { gerarHashSenha } from '../modulos/auth/senha.js';
 import { abrirBanco } from './cliente.js';
 import {
+  avaliacoes,
+  contratacaoPets,
+  contratacoes,
   curtidas,
   encontros,
   favoritas,
@@ -11,6 +14,7 @@ import {
   passeios,
   pets,
   presencas,
+  prestadores,
   rotas,
   usuarios,
   type LatLng,
@@ -455,6 +459,85 @@ await banco.transaction(async (tx) => {
     emRelacaoAAgora(-3 * DIA),
     [julia],
   );
+
+  const [passeadora, hospedagem] = await tx
+    .insert(prestadores)
+    .values([
+      {
+        usuarioId: ana.id,
+        tipo: 'passeador',
+        nome: 'Ana Passeios',
+        descricao: 'Passeios em grupos de até 3 cães, com foto e trajeto no fim. Aceito filhotes.',
+        contato: '(21) 98888-1111',
+        bairro: 'Botafogo',
+        latitude: -22.9468,
+        longitude: -43.1823,
+        precos: [
+          { descricao: 'Passeio de 30 min', valorCentavos: 2500 },
+          { descricao: 'Passeio de 1 h', valorCentavos: 4000 },
+        ],
+      },
+      {
+        usuarioId: rafael.id,
+        tipo: 'anfitriao',
+        nome: 'Casa do Rafael',
+        descricao: 'Casa com quintal telado e sem outros pets. Mando fotos todo dia.',
+        contato: '(21) 98888-2222',
+        bairro: 'Laranjeiras',
+        latitude: -22.9353,
+        longitude: -43.1866,
+        precos: [{ descricao: 'Diária', valorCentavos: 9000 }],
+      },
+      {
+        usuarioId: julia.id,
+        tipo: 'petshop',
+        nome: 'Banho da Júlia',
+        descricao: 'Banho e tosa com hora marcada, sem gaiola e sem secador barulhento.',
+        contato: '(21) 98888-3333',
+        bairro: 'Flamengo',
+        latitude: -22.9329,
+        longitude: -43.1757,
+        precos: [
+          { descricao: 'Banho porte P', valorCentavos: 5000 },
+          { descricao: 'Banho e tosa porte M', valorCentavos: 9000 },
+        ],
+      },
+    ])
+    .returning({ id: prestadores.id });
+
+  // O Jeff já usou a passeadora (e avaliou) e pediu uma hospedagem, que espera resposta.
+  const [passeioContratado, hospedagemPedida] = await tx
+    .insert(contratacoes)
+    .values([
+      {
+        prestadorId: passeadora!.id,
+        clienteId: jeff.id,
+        inicio: emRelacaoAAgora(-5 * DIA, 9),
+        contato: '(21) 97777-0000',
+        mensagem: 'O Bolota puxa um pouco no começo.',
+        status: 'concluida',
+      },
+      {
+        prestadorId: hospedagem!.id,
+        clienteId: jeff.id,
+        inicio: emRelacaoAAgora(10 * DIA, 10),
+        fim: emRelacaoAAgora(13 * DIA, 18),
+        contato: '(21) 97777-0000',
+        mensagem: 'Viagem de fim de semana. Ele come duas vezes por dia.',
+      },
+    ])
+    .returning({ id: contratacoes.id });
+  await tx.insert(contratacaoPets).values(
+    [passeioContratado!, hospedagemPedida!].map((c) => ({
+      contratacaoId: c.id,
+      petId: petDe.get(jeff.id)!,
+    })),
+  );
+  await tx.insert(avaliacoes).values({
+    contratacaoId: passeioContratado!.id,
+    nota: 5,
+    comentario: 'Pontual e mandou fotos do passeio. O Bolota voltou cansado e feliz!',
+  });
 });
 
 console.log(

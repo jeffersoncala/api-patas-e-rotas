@@ -87,6 +87,15 @@ schemas Zod que validam as requisições. Resumo:
 | `GET /passeios` · `POST /passeios`      | Feed paginado (`?autor=todos\|eu&limite=&antesDe=`) e registro (`petIds` e até 4 `fotos` opcionais) |
 | `GET / PATCH / DELETE /passeios/:id`    | Detalhe; alterar (texto, duração, `fotos`) e apagar só o autor                                      |
 | `PUT / DELETE /passeios/:id/curtida`    | Curte ou descurte                                                                                   |
+| `GET /prestadores`                      | Serviços ativos no raio (`?lat=&lng=&raioKm=&tipo=passeador\|anfitriao\|petshop`)                   |
+| `GET /prestadores/meus`                 | Serviços que o usuário oferece, inclusive os pausados                                               |
+| `POST /prestadores`                     | Oferece um serviço (um de cada tipo por usuário), com preços e até 6 `fotos`                        |
+| `GET / PATCH / DELETE /prestadores/:id` | Detalhe; alterar (inclusive `ativo` e `fotos`) e apagar só quem cadastrou                           |
+| `GET /prestadores/:id/avaliacoes`       | Avaliações, das mais novas para as mais antigas                                                     |
+| `GET /contratacoes` · `POST`            | Pedidos feitos (`?papel=cliente`) ou recebidos (`?papel=prestador`); pedir um serviço               |
+| `GET /contratacoes/:id`                 | Detalhe (só o cliente e o prestador enxergam)                                                       |
+| `PUT /contratacoes/:id/status`          | `aceita`, `recusada`, `concluida` (prestador) ou `cancelada` (qualquer das partes)                  |
+| `PUT /contratacoes/:id/avaliacao`       | `{ nota: 1-5, comentario }`, só o cliente e só depois de concluída; de novo substitui               |
 
 Tudo, fora cadastro, login, refresh e recuperação de senha, exige
 `Authorization: Bearer <accessToken>`. Os formatos de `Encontro`, `Rota`, `Passeio` e `Perfil`
@@ -128,6 +137,9 @@ Mesmo corpo da API Java, para o front não precisar tratar dois formatos:
 - **Fotos no próprio Postgres** (tabela `fotos`, em base64), para não depender de outro serviço.
   O front reduz a imagem para 512 px antes de enviar; a API aceita JPEG, PNG e WebP de até
   1,5 MB e confere os primeiros bytes do arquivo. Toda mudança no perfil devolve o perfil inteiro.
+- **Serviços sem pagamento no app.** O pedido segue `pendente → aceita → concluida` (ou
+  `recusada`/`cancelada`), e o pagamento é combinado direto entre as partes. A avaliação é
+  amarrada à contratação concluída: só avalia quem contratou, uma vez por serviço.
 - **Sem vazamento de conta:** login de e-mail inexistente leva o mesmo tempo, e a recuperação de
   senha responde igual exista a conta ou não.
 

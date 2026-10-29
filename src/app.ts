@@ -19,12 +19,14 @@ import { enviarEmailNoLog, type EnviarEmail } from './email.js';
 import { CUSTO_PADRAO, CUSTO_TESTE } from './modulos/auth/senha.js';
 import { Tokens } from './modulos/auth/tokens.js';
 import { authEndpoints } from './modulos/auth/endpoints.js';
+import { contratacoesEndpoints } from './modulos/contratacoes/endpoints.js';
 import { desaparecidosEndpoints } from './modulos/desaparecidos/endpoints.js';
 import { encontrosEndpoints } from './modulos/encontros/endpoints.js';
 import { fotosEndpoints } from './modulos/fotos/endpoints.js';
 import { passeiosEndpoints } from './modulos/passeios/endpoints.js';
 import { perfilEndpoints } from './modulos/perfil/endpoints.js';
 import { petsEndpoints } from './modulos/pets/endpoints.js';
+import { prestadoresEndpoints } from './modulos/prestadores/endpoints.js';
 import { rotasEndpoints } from './modulos/rotas/endpoints.js';
 
 // Mensagens de validação do Zod em português (vão no campo `campos` das respostas 400).
@@ -102,6 +104,10 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
         { name: 'rotas', description: 'Rotas de passeio' },
         { name: 'passeios', description: 'Passeios registrados e feed' },
         { name: 'desaparecidos', description: 'Pets desaparecidos por perto' },
+        {
+          name: 'servicos',
+          description: 'Passeadores, hospedagem e petshops: cadastro, pedidos e avaliações',
+        },
       ],
     },
     transform: jsonSchemaTransform,
@@ -119,6 +125,8 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
   await app.register(rotasEndpoints, { prefix: '/rotas' });
   await app.register(passeiosEndpoints, { prefix: '/passeios' });
   await app.register(desaparecidosEndpoints, { prefix: '/desaparecidos' });
+  await app.register(prestadoresEndpoints, { prefix: '/prestadores' });
+  await app.register(contratacoesEndpoints, { prefix: '/contratacoes' });
 
   return app;
 }

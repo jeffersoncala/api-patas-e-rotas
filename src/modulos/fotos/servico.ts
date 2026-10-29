@@ -48,6 +48,12 @@ export const esquemaImagem = z
 
 export type Imagem = z.output<typeof esquemaImagem>;
 
+/** Foto que o registro já tem, pelo caminho que a API devolve; vira o id. */
+export const fotoExistente = z
+  .string()
+  .regex(/^\/fotos\/[0-9a-f-]{36}$/i, 'Caminho de foto inválido')
+  .transform((caminho) => ({ id: caminho.slice('/fotos/'.length).toLowerCase() }));
+
 /** Caminho público da foto (relativo à API), ou `null` sem foto. */
 export const urlFoto = (id: string | null) => (id ? `/fotos/${id}` : null);
 

@@ -3,13 +3,11 @@ import type { FastifyInstance } from 'fastify';
 import type { Banco } from '../../db/cliente.js';
 import { desaparecidos, usuarios, type LatLng } from '../../db/schema.js';
 import { naoEncontrado, proibido } from '../../erros.js';
+import { distanciaSql, KM_POR_GRAU_LAT } from '../../geo.js';
 import { apagarFotos, salvarFoto, urlFoto, type Imagem } from '../fotos/servico.js';
 
 /** Teto da busca, para a lista não crescer sem limite numa região cheia. */
 const MAX_RESULTADOS = 200;
-
-/** Um grau de latitude tem ~111 km em qualquer ponto do globo. */
-const KM_POR_GRAU_LAT = 111.32;
 
 export interface DadosDesaparecido {
   nome: string;
@@ -30,10 +28,9 @@ export interface FiltrosDesaparecidos {
   raioKm: number;
 }
 
-/** Distância em km (haversine) entre o ponto dado e o local onde o pet foi visto. */
-function distanciaAte([lat, lng]: LatLng) {
-  return sql<number>`2 * 6371 * asin(sqrt(power(sin(radians(${desaparecidos.latitude} - ${lat}::float8) / 2), 2) + cos(radians(${lat}::float8)) * cos(radians(${desaparecidos.latitude})) * power(sin(radians(${desaparecidos.longitude} - ${lng}::float8) / 2), 2)))`;
-}
+/** Distância em km entre o ponto dado e o local onde o pet foi visto. */
+const distanciaAte = (origem: LatLng) =>
+  distanciaSql(desaparecidos.latitude, desaparecidos.longitude, origem);
 
 function consultar(banco: Banco, onde: SQL | undefined, origem?: LatLng) {
   return banco

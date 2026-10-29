@@ -1,5 +1,8 @@
+import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -8,6 +11,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -257,4 +261,123 @@ export const desaparecidos = pgTable(
     index('desaparecidos_latitude_idx').on(t.latitude),
     index('desaparecidos_usuario_idx').on(t.usuarioId),
   ],
+).enableRLS();
+
+export const TIPOS_SERVICO = ['passeador', 'anfitriao', 'petshop'] as const;
+
+/** Item da tabela de preços do prestador, ex. "Passeio de 30 min": 2500 (R$ 25,00). */
+export interface Preco {
+  descricao: string;
+  /** Em centavos, para não ter erro de arredondamento. */
+  valorCentavos: number;
+}
+
+/**
+ * Quem oferece um serviço: passeador, anfitrião (hospedagem) ou petshop (banho e tosa). Um
+ * usuário pode ter um cadastro de cada tipo, e qualquer tutor pode contratá-lo.
+ */
+export const prestadores = pgTable(
+  'prestadores',
+  {
+    id: idSerial(),
+    usuarioId: refUsuario('usuario_id'),
+    tipo: text('tipo', { enum: TIPOS_SERVICO }).notNull(),
+    /** Nome que aparece na busca: o do tutor ou o do petshop. */
+    nome: text('nome').notNull(),
+    descricao: text('descricao').notNull().default(''),
+    contato: text('contato').notNull(),
+    bairro: text('bairro').notNull(),
+    latitude: doublePrecision('latitude').notNull(),
+    longitude: doublePrecision('longitude').notNull(),
+    precos: jsonb('precos').$type<Preco[]>().notNull().default([]),
+    /** Pausado não aparece na busca nem recebe pedidos, mas os pedidos antigos ficam. */
+    ativo: boolean('ativo').notNull().default(true),
+    criadoEm: criadoEm(),
+  },
+  (t) => [
+    unique('prestadores_usuario_tipo_unq').on(t.usuarioId, t.tipo),
+    index('prestadores_tipo_latitude_idx').on(t.tipo, t.latitude),
+  ],
+).enableRLS();
+
+/** Fotos do prestador (o ambiente da hospedagem, o petshop...), na ordem escolhida. */
+export const prestadorFotos = pgTable(
+  'prestador_fotos',
+  {
+    prestadorId: integer('prestador_id')
+      .notNull()
+      .references(() => prestadores.id, { onDelete: 'cascade' }),
+    fotoId: uuid('foto_id')
+      .notNull()
+      .references(() => fotos.id, { onDelete: 'cascade' }),
+    ordem: integer('ordem').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.prestadorId, t.ordem] })],
+).enableRLS();
+
+export const STATUS_CONTRATACAO = [
+  'pendente',
+  'aceita',
+  'recusada',
+  'cancelada',
+  'concluida',
+] as const;
+
+/**
+ * Pedido de um tutor (cliente) a um prestador. Começa `pendente`; o prestador aceita ou
+ * recusa e, depois do serviço, marca como concluída. Só então o cliente pode avaliar.
+ */
+export const contratacoes = pgTable(
+  'contratacoes',
+  {
+    id: idSerial(),
+    prestadorId: integer('prestador_id')
+      .notNull()
+      .references(() => prestadores.id, { onDelete: 'cascade' }),
+    clienteId: refUsuario('cliente_id'),
+    inicio: instante('inicio').notNull(),
+    /** Só na hospedagem: o dia de buscar o pet. */
+    fim: instante('fim'),
+    /** Telefone do cliente, para o prestador combinar os detalhes. */
+    contato: text('contato').notNull(),
+    mensagem: text('mensagem').notNull().default(''),
+    status: text('status', { enum: STATUS_CONTRATACAO }).notNull().default('pendente'),
+    criadoEm: criadoEm(),
+    atualizadoEm: instante('atualizado_em').notNull().defaultNow(),
+  },
+  (t) => [
+    index('contratacoes_prestador_idx').on(t.prestadorId),
+    index('contratacoes_cliente_idx').on(t.clienteId),
+  ],
+).enableRLS();
+
+/** Pets que vão no serviço contratado. */
+export const contratacaoPets = pgTable(
+  'contratacao_pets',
+  {
+    contratacaoId: integer('contratacao_id')
+      .notNull()
+      .references(() => contratacoes.id, { onDelete: 'cascade' }),
+    petId: integer('pet_id')
+      .notNull()
+      .references(() => pets.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.contratacaoId, t.petId] })],
+).enableRLS();
+
+/**
+ * Uma avaliação por contratação concluída, feita pelo cliente. Amarrar à contratação
+ * impede avaliar quem nunca foi contratado e avaliar o mesmo serviço duas vezes.
+ */
+export const avaliacoes = pgTable(
+  'avaliacoes',
+  {
+    contratacaoId: integer('contratacao_id')
+      .primaryKey()
+      .references(() => contratacoes.id, { onDelete: 'cascade' }),
+    nota: integer('nota').notNull(),
+    comentario: text('comentario').notNull().default(''),
+    criadoEm: criadoEm(),
+  },
+  (t) => [check('avaliacoes_nota_chk', sql`${t.nota} between 1 and 5`)],
 ).enableRLS();

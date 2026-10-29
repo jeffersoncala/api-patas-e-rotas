@@ -75,7 +75,7 @@ const cursorDe = (p: Passeio) => `${Date.parse(p.data)}.${p.id}`;
 export const esquemaLimite = z.coerce.number().int().min(1).max(50).default(20);
 
 /** O PGlite já devolve o JSON interpretado; outros drivers podem devolver texto. */
-const lerJson = <T>(valor: unknown): T =>
+export const lerJson = <T>(valor: unknown): T =>
   (typeof valor === 'string' ? JSON.parse(valor) : valor) as T;
 
 /**

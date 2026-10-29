@@ -1,3 +1,4 @@
+import { sql, type Column } from 'drizzle-orm';
 import type { LatLng } from './db/schema.js';
 
 const RAIO_TERRA_KM = 6371;
@@ -21,4 +22,12 @@ export function distanciaTrajeto(pontos: readonly LatLng[]): number {
     total += distanciaEntre(pontos[i - 1]!, pontos[i]!);
   }
   return Math.round(total * 1000) / 1000;
+}
+
+/** Um grau de latitude tem ~111 km em qualquer ponto do globo. */
+export const KM_POR_GRAU_LAT = 111.32;
+
+/** Distância em km (haversine, no banco) entre o ponto dado e as colunas de latitude e longitude. */
+export function distanciaSql(latitude: Column, longitude: Column, [lat, lng]: LatLng) {
+  return sql<number>`2 * ${RAIO_TERRA_KM} * asin(sqrt(power(sin(radians(${latitude} - ${lat}::float8) / 2), 2) + cos(radians(${lat}::float8)) * cos(radians(${latitude})) * power(sin(radians(${longitude} - ${lng}::float8) / 2), 2)))`;
 }

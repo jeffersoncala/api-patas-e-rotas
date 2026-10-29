@@ -15,7 +15,7 @@ import {
   trajeto,
 } from '../../esquemas.js';
 import { distanciaTrajeto } from '../../geo.js';
-import { apagarFotos, esquemaImagem, salvarFoto } from '../fotos/servico.js';
+import { apagarFotos, esquemaImagem, fotoExistente, salvarFoto } from '../fotos/servico.js';
 import {
   buscarPasseio,
   esquemaCursor,
@@ -34,12 +34,6 @@ export const MAX_FOTOS_PASSEIO = 4;
  * reduz as fotos, então quatro delas cabem com folga.
  */
 const LIMITE_CORPO_PASSEIO = 4_000_000;
-
-/** Foto que o passeio já tem, pelo caminho que a API devolve; vira o id. */
-const fotoExistente = z
-  .string()
-  .regex(/^\/fotos\/[0-9a-f-]{36}$/i, 'Caminho de foto inválido')
-  .transform((caminho) => ({ id: caminho.slice('/fotos/'.length).toLowerCase() }));
 
 const esquemaFotos = z
   .array(esquemaImagem)
