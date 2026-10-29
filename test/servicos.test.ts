@@ -267,6 +267,8 @@ describe('contratações', () => {
       contato: '(21) 97777-0000',
       mensagem: 'Ele puxa',
       criadoEm: expect.any(String),
+      iniciadoEm: null,
+      finalizadoEm: null,
       papel: 'cliente',
       cliente: { nome: 'Bia', foto: null },
       prestador: {
@@ -343,7 +345,7 @@ describe('contratações', () => {
   });
 
   it('segue o fluxo: o prestador aceita e conclui, e só então o cliente avalia', async () => {
-    const { app, ana, bia, prestador } = await cenario();
+    const { app, ana, bia, prestador } = await cenario('petshop');
     // Começou há um minuto (dentro da tolerância), para já poder concluir.
     const { id } = (
       await pedir(app, bia.headers, prestador.id, { inicio: daquiHoras(-1 / 60) })
@@ -394,7 +396,7 @@ describe('contratações', () => {
   });
 
   it('não deixa concluir antes do início; recusa e cancelamento são finais', async () => {
-    const { app, ana, bia, prestador } = await cenario();
+    const { app, ana, bia, prestador } = await cenario('petshop');
     const pedido = async () => (await pedir(app, bia.headers, prestador.id)).json().id as number;
 
     const futuro = await pedido();
@@ -416,7 +418,7 @@ describe('contratações', () => {
   });
 
   it('a média junta as avaliações de clientes diferentes', async () => {
-    const { app, ana, bia, prestador } = await cenario();
+    const { app, ana, bia, prestador } = await cenario('petshop');
     const caio = await cadastrar(app, { tutor: 'Caio' });
 
     for (const [cliente, nota] of [
@@ -436,7 +438,127 @@ describe('contratações', () => {
       });
     }
 
-    const r = await app.inject({ url: buscar('&tipo=passeador'), headers: bia.headers });
+    const r = await app.inject({ url: buscar('&tipo=petshop'), headers: bia.headers });
     expect(r.json()[0]).toMatchObject({ notaMedia: 3.5, totalAvaliacoes: 2 });
+  });
+});
+
+describe('passeio ao vivo', () => {
+  /** Ana é passeadora e já aceitou o pedido de Bia, marcado para daqui a uma hora. */
+  async function passeioAceito(tipo = 'passeador') {
+    const { app } = await criarAppTeste();
+    const ana = await cadastrar(app, { tutor: 'Ana' });
+    const bia = await cadastrar(app, { tutor: 'Bia' });
+    const prestador = await criarPrestador(app, ana.headers, { tipo });
+    const { id } = (await pedir(app, bia.headers, prestador.id, { inicio: daquiHoras(1) })).json();
+    await mudarStatus(app, ana.headers, id, 'aceita');
+    return { app, ana, bia, id };
+  }
+
+  const enviarPontos = (app: App, headers: Headers, id: number, pontos: unknown) =>
+    app.inject({
+      method: 'POST',
+      url: `/contratacoes/${id}/posicoes`,
+      headers,
+      payload: { pontos },
+    });
+
+  const acompanhar = (app: App, headers: Headers, id: number, desde?: number) =>
+    app.inject({
+      url: `/contratacoes/${id}/acompanhamento${desde === undefined ? '' : `?desde=${desde}`}`,
+      headers,
+    });
+
+  it('o passeador inicia, envia o trajeto e o tutor acompanha só os pontos novos', async () => {
+    const { app, ana, bia, id } = await passeioAceito();
+
+    // Antes de iniciar, não recebe posição.
+    expect((await enviarPontos(app, ana.headers, id, [PERTO])).statusCode).toBe(409);
+
+    const iniciado = await mudarStatus(app, ana.headers, id, 'em_andamento');
+    expect(iniciado.json()).toMatchObject({
+      status: 'em_andamento',
+      iniciadoEm: expect.any(String),
+      finalizadoEm: null,
+    });
+
+    expect((await enviarPontos(app, ana.headers, id, [CENTRO, PERTO])).statusCode).toBe(204);
+    expect((await enviarPontos(app, bia.headers, id, [MEIO])).statusCode).toBe(403);
+
+    const primeira = (await acompanhar(app, bia.headers, id)).json();
+    expect(primeira).toMatchObject({
+      status: 'em_andamento',
+      totalPontos: 2,
+      pontos: [CENTRO, PERTO],
+      posicaoEm: expect.any(String),
+      duracaoMin: 0,
+    });
+    expect(primeira.distanciaKm).toBeCloseTo(1.112, 2);
+
+    await enviarPontos(app, ana.headers, id, [MEIO]);
+    const segunda = (await acompanhar(app, bia.headers, id, primeira.totalPontos)).json();
+    expect(segunda).toMatchObject({ totalPontos: 3, pontos: [MEIO] });
+    expect(segunda.distanciaKm).toBeCloseTo(5.56, 1);
+
+    // Quem não participa não acompanha.
+    const caio = await cadastrar(app);
+    expect((await acompanhar(app, caio.headers, id)).statusCode).toBe(404);
+  });
+
+  it('o passeio só termina depois de iniciado, e o trajeto fica para depois', async () => {
+    const { app, ana, bia, id } = await passeioAceito();
+
+    const direto = await mudarStatus(app, ana.headers, id, 'concluida');
+    expect(direto.statusCode).toBe(409);
+    expect(direto.json().mensagem).toBe('Inicie o passeio quando pegar o pet');
+    expect((await mudarStatus(app, bia.headers, id, 'em_andamento')).statusCode).toBe(403);
+
+    await mudarStatus(app, ana.headers, id, 'em_andamento');
+    await enviarPontos(app, ana.headers, id, [CENTRO, PERTO]);
+    // Em andamento ninguém cancela: o pet está com o passeador.
+    expect((await mudarStatus(app, bia.headers, id, 'cancelada')).statusCode).toBe(409);
+
+    const fim = await mudarStatus(app, ana.headers, id, 'concluida');
+    expect(fim.json()).toMatchObject({ status: 'concluida', finalizadoEm: expect.any(String) });
+    expect((await enviarPontos(app, ana.headers, id, [MEIO])).statusCode).toBe(409);
+
+    const depois = (await acompanhar(app, bia.headers, id)).json();
+    expect(depois).toMatchObject({ status: 'concluida', totalPontos: 2 });
+
+    // Concluído pelo caminho certo, o tutor avalia normalmente.
+    const avaliada = await app.inject({
+      method: 'PUT',
+      url: `/contratacoes/${id}/avaliacao`,
+      headers: bia.headers,
+      payload: { nota: 5 },
+    });
+    expect(avaliada.statusCode).toBe(200);
+  });
+
+  it('valida os pontos e só vale para passeio, perto do horário marcado', async () => {
+    const { app, ana, id } = await passeioAceito();
+    await mudarStatus(app, ana.headers, id, 'em_andamento');
+
+    expect((await enviarPontos(app, ana.headers, id, [])).statusCode).toBe(400);
+    expect((await enviarPontos(app, ana.headers, id, [[91, 0]])).statusCode).toBe(400);
+    expect((await enviarPontos(app, ana.headers, id, Array(201).fill(PERTO))).statusCode).toBe(400);
+
+    const petshop = await passeioAceito('petshop');
+    const naoPasseio = await mudarStatus(
+      petshop.app,
+      petshop.ana.headers,
+      petshop.id,
+      'em_andamento',
+    );
+    expect(naoPasseio.statusCode).toBe(409);
+
+    const cedo = await criarAppTeste();
+    const ana2 = await cadastrar(cedo.app);
+    const bia2 = await cadastrar(cedo.app);
+    const p = await criarPrestador(cedo.app, ana2.headers);
+    const pedido = (await pedir(cedo.app, bia2.headers, p.id, { inicio: daquiHoras(5) })).json();
+    await mudarStatus(cedo.app, ana2.headers, pedido.id, 'aceita');
+    const antes = await mudarStatus(cedo.app, ana2.headers, pedido.id, 'em_andamento');
+    expect(antes.json().mensagem).toBe('Ainda falta muito para o horário do passeio');
   });
 });

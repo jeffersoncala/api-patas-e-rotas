@@ -9,11 +9,13 @@ import {
   pets,
   prestadores,
   type ESPECIES,
+  type LatLng,
   type PORTES,
   usuarios,
   type STATUS_CONTRATACAO,
 } from '../../db/schema.js';
 import { ErroApi, naoEncontrado, proibido } from '../../erros.js';
+import { distanciaTrajeto } from '../../geo.js';
 import { urlFoto } from '../fotos/servico.js';
 import { lerJson } from '../passeios/servico.js';
 
@@ -40,11 +42,17 @@ export interface DadosContratacao {
 
 /**
  * Quem pode levar o pedido de um status a outro. O prestador conduz o serviço; o cliente
- * só desiste. Recusada, cancelada e concluída são finais.
+ * só desiste. Recusada, cancelada e concluída são finais. `em_andamento` é só do passeio
+ * (veja `mudarStatus`): começa quando o passeador pega o pet e termina quando ele devolve.
  */
 const TRANSICOES: Record<StatusContratacao, Partial<Record<StatusContratacao, Papel[]>>> = {
   pendente: { aceita: ['prestador'], recusada: ['prestador'], cancelada: ['cliente', 'prestador'] },
-  aceita: { concluida: ['prestador'], cancelada: ['cliente', 'prestador'] },
+  aceita: {
+    em_andamento: ['prestador'],
+    concluida: ['prestador'],
+    cancelada: ['cliente', 'prestador'],
+  },
+  em_andamento: { concluida: ['prestador'] },
   recusada: {},
   cancelada: {},
   concluida: {},
@@ -53,10 +61,17 @@ const TRANSICOES: Record<StatusContratacao, Partial<Record<StatusContratacao, Pa
 const ROTULOS: Record<StatusContratacao, string> = {
   pendente: 'pendente',
   aceita: 'aceito',
+  em_andamento: 'em andamento',
   recusada: 'recusado',
   cancelada: 'cancelado',
   concluida: 'concluído',
 };
+
+/** Teto do trajeto (o mesmo dos passeios): ~4 h de passeio com um ponto a cada 3 s. */
+export const MAX_PONTOS_TRAJETO = 5000;
+
+/** Pode começar o passeio um pouco antes do horário marcado. */
+const ANTECEDENCIA_INICIO_MS = 2 * 60 * 60_000;
 
 const donoDoServico = alias(usuarios, 'dono_do_servico');
 
@@ -70,6 +85,8 @@ function consultar(banco: Banco, onde: SQL | undefined) {
       contato: contratacoes.contato,
       mensagem: contratacoes.mensagem,
       criadoEm: contratacoes.criadoEm,
+      iniciadoEm: contratacoes.iniciadoEm,
+      finalizadoEm: contratacoes.finalizadoEm,
       clienteId: contratacoes.clienteId,
       cliente: usuarios.tutor,
       fotoCliente: usuarios.fotoId,
@@ -105,6 +122,8 @@ function formatar(usuarioId: string, linha: Linha) {
     contato: linha.contato,
     mensagem: linha.mensagem,
     criadoEm: linha.criadoEm.toISOString(),
+    iniciadoEm: linha.iniciadoEm?.toISOString() ?? null,
+    finalizadoEm: linha.finalizadoEm?.toISOString() ?? null,
     papel: (linha.clienteId === usuarioId ? 'cliente' : 'prestador') as Papel,
     cliente: { nome: linha.cliente, foto: urlFoto(linha.fotoCliente) },
     prestador: {
@@ -211,16 +230,85 @@ export class ContratacoesServico {
           : 'Só quem fez o pedido pode fazer isso',
       );
     }
-    if (novo === 'concluida' && Date.parse(atual.inicio) > Date.now()) {
-      throw new ErroApi(409, 'Só dá para concluir depois que o serviço começar');
+    const passeio = atual.prestador.tipo === 'passeador';
+    if (novo === 'em_andamento') {
+      if (!passeio) throw new ErroApi(409, 'Só o passeio tem acompanhamento ao vivo');
+      if (Date.parse(atual.inicio) - Date.now() > ANTECEDENCIA_INICIO_MS) {
+        throw new ErroApi(409, 'Ainda falta muito para o horário do passeio');
+      }
+    }
+    if (novo === 'concluida' && atual.status === 'aceita') {
+      // O passeio precisa passar pelo "em andamento": é o que o tutor acompanha.
+      if (passeio) throw new ErroApi(409, 'Inicie o passeio quando pegar o pet');
+      if (Date.parse(atual.inicio) > Date.now()) {
+        throw new ErroApi(409, 'Só dá para concluir depois que o serviço começar');
+      }
     }
 
+    const agora = new Date();
     await this.banco
       .update(contratacoes)
-      .set({ status: novo, atualizadoEm: new Date() })
+      .set({
+        status: novo,
+        atualizadoEm: agora,
+        ...(novo === 'em_andamento' && { iniciadoEm: agora }),
+        ...(atual.status === 'em_andamento' && { finalizadoEm: agora }),
+      })
       // O status atual na condição evita corrida entre as duas partes.
       .where(and(eq(contratacoes.id, id), eq(contratacoes.status, atual.status)));
     return this.buscar(usuarioId, id);
+  }
+
+  /** O passeador envia os pontos novos do GPS enquanto o passeio está em andamento. */
+  async registrarPosicoes(usuarioId: string, id: number, pontos: LatLng[]) {
+    const atual = await this.buscar(usuarioId, id);
+    if (atual.papel !== 'prestador') throw proibido('Só o passeador envia a posição');
+    if (atual.status !== 'em_andamento') {
+      throw new ErroApi(409, 'O passeio não está em andamento');
+    }
+    const [atualizado] = await this.banco
+      .update(contratacoes)
+      .set({
+        trajeto: sql`${contratacoes.trajeto} || ${JSON.stringify(pontos)}::jsonb`,
+        posicaoEm: new Date(),
+      })
+      .where(
+        and(
+          eq(contratacoes.id, id),
+          eq(contratacoes.status, 'em_andamento'),
+          sql`jsonb_array_length(${contratacoes.trajeto}) + ${pontos.length} <= ${MAX_PONTOS_TRAJETO}`,
+        ),
+      )
+      .returning({ id: contratacoes.id });
+    if (!atualizado) {
+      throw new ErroApi(409, 'O trajeto chegou ao limite de pontos. Encerre o passeio');
+    }
+  }
+
+  /**
+   * O que o tutor (e o passeador) vê no mapa. `desde` pula os pontos que quem pergunta já
+   * tem, para a consulta repetida a cada poucos segundos ficar leve.
+   */
+  async acompanhamento(usuarioId: string, id: number, desde: number) {
+    const atual = await this.buscar(usuarioId, id);
+    const [linha] = await this.banco
+      .select({ trajeto: contratacoes.trajeto, posicaoEm: contratacoes.posicaoEm })
+      .from(contratacoes)
+      .where(eq(contratacoes.id, id));
+    const trajeto = linha!.trajeto;
+    const fimOuAgora = atual.finalizadoEm ? Date.parse(atual.finalizadoEm) : Date.now();
+    return {
+      status: atual.status,
+      iniciadoEm: atual.iniciadoEm,
+      finalizadoEm: atual.finalizadoEm,
+      posicaoEm: linha!.posicaoEm?.toISOString() ?? null,
+      duracaoMin: atual.iniciadoEm
+        ? Math.max(0, Math.round((fimOuAgora - Date.parse(atual.iniciadoEm)) / 60_000))
+        : 0,
+      distanciaKm: distanciaTrajeto(trajeto),
+      totalPontos: trajeto.length,
+      pontos: trajeto.slice(desde),
+    };
   }
 
   /** O cliente avalia um serviço concluído; avaliar de novo substitui a nota. */

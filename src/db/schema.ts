@@ -318,6 +318,7 @@ export const prestadorFotos = pgTable(
 export const STATUS_CONTRATACAO = [
   'pendente',
   'aceita',
+  'em_andamento',
   'recusada',
   'cancelada',
   'concluida',
@@ -326,6 +327,8 @@ export const STATUS_CONTRATACAO = [
 /**
  * Pedido de um tutor (cliente) a um prestador. Começa `pendente`; o prestador aceita ou
  * recusa e, depois do serviço, marca como concluída. Só então o cliente pode avaliar.
+ * No passeio há um passo a mais: `em_andamento`, do momento em que o passeador pega o pet
+ * até devolver, com o trajeto enviado pelo GPS dele para o tutor acompanhar.
  */
 export const contratacoes = pgTable(
   'contratacoes',
@@ -342,6 +345,13 @@ export const contratacoes = pgTable(
     contato: text('contato').notNull(),
     mensagem: text('mensagem').notNull().default(''),
     status: text('status', { enum: STATUS_CONTRATACAO }).notNull().default('pendente'),
+    /** Quando o passeador pegou o pet e quando devolveu. */
+    iniciadoEm: instante('iniciado_em'),
+    finalizadoEm: instante('finalizado_em'),
+    /** Pontos do GPS do passeador, na ordem em que chegaram. */
+    trajeto: jsonb('trajeto').$type<LatLng[]>().notNull().default([]),
+    /** Quando chegou o último ponto, para o tutor saber se o sinal está em dia. */
+    posicaoEm: instante('posicao_em'),
     criadoEm: criadoEm(),
     atualizadoEm: instante('atualizado_em').notNull().defaultNow(),
   },

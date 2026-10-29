@@ -94,7 +94,9 @@ schemas Zod que validam as requisições. Resumo:
 | `GET /prestadores/:id/avaliacoes`       | Avaliações, das mais novas para as mais antigas                                                     |
 | `GET /contratacoes` · `POST`            | Pedidos feitos (`?papel=cliente`) ou recebidos (`?papel=prestador`); pedir um serviço               |
 | `GET /contratacoes/:id`                 | Detalhe (só o cliente e o prestador enxergam)                                                       |
-| `PUT /contratacoes/:id/status`          | `aceita`, `recusada`, `concluida` (prestador) ou `cancelada` (qualquer das partes)                  |
+| `PUT /contratacoes/:id/status`          | `aceita`, `recusada`, `em_andamento` (passeio), `concluida` (prestador) ou `cancelada`              |
+| `POST /contratacoes/:id/posicoes`       | O passeador envia os pontos novos do GPS (`{ pontos }`, só com o passeio em andamento)              |
+| `GET /contratacoes/:id/acompanhamento`  | Trajeto e estado do passeio ao vivo; `?desde=N` traz só os pontos depois dos N primeiros            |
 | `PUT /contratacoes/:id/avaliacao`       | `{ nota: 1-5, comentario }`, só o cliente e só depois de concluída; de novo substitui               |
 
 Tudo, fora cadastro, login, refresh e recuperação de senha, exige
@@ -140,6 +142,10 @@ Mesmo corpo da API Java, para o front não precisar tratar dois formatos:
 - **Serviços sem pagamento no app.** O pedido segue `pendente → aceita → concluida` (ou
   `recusada`/`cancelada`), e o pagamento é combinado direto entre as partes. A avaliação é
   amarrada à contratação concluída: só avalia quem contratou, uma vez por serviço.
+- **Passeio ao vivo por consulta periódica, não WebSocket.** A função serverless da Vercel não
+  mantém conexão aberta. O passeador envia os pontos a cada ~10 s e o tutor consulta a cada
+  ~5 s, pedindo só os pontos novos (`desde`). No passeio, `em_andamento` é obrigatório entre
+  `aceita` e `concluida`: é o que garante que o tutor tenha o que acompanhar.
 - **Sem vazamento de conta:** login de e-mail inexistente leva o mesmo tempo, e a recuperação de
   senha responde igual exista a conta ou não.
 

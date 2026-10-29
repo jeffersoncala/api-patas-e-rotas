@@ -43,6 +43,13 @@
       "when": 1793297624469,
       "tag": "0005_servicos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793301301151,
+      "tag": "0006_passeio_ao_vivo",
+      "breakpoints": true
     }
   ]
 }

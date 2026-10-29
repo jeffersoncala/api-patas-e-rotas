@@ -516,6 +516,11 @@ await banco.transaction(async (tx) => {
         contato: '(21) 97777-0000',
         mensagem: 'O Bolota puxa um pouco no começo.',
         status: 'concluida',
+        // O trajeto que a Ana enviou ao vivo, ainda visível para o Jeff.
+        iniciadoEm: emRelacaoAAgora(-5 * DIA, 9, 5),
+        finalizadoEm: emRelacaoAAgora(-5 * DIA, 9, 50),
+        trajeto: ORLA_BOTAFOGO,
+        posicaoEm: emRelacaoAAgora(-5 * DIA, 9, 50),
       },
       {
         prestadorId: hospedagem!.id,

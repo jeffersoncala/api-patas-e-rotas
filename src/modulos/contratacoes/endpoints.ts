@@ -6,11 +6,13 @@ import {
   dataIso,
   erros,
   idNumerico,
+  latLng,
   paramId,
+  semConteudo,
   seguranca,
   textoObrigatorio,
 } from '../../esquemas.js';
-import { ContratacoesServico } from './servico.js';
+import { ContratacoesServico, MAX_PONTOS_TRAJETO } from './servico.js';
 
 /** Folga para relógio de celular atrasado. */
 const TOLERANCIA_PASSADO_MS = 5 * 60_000;
@@ -48,6 +50,8 @@ const esquemaContratacao = z
     contato: z.string().describe('Telefone do cliente'),
     mensagem: z.string(),
     criadoEm: dataIso,
+    iniciadoEm: dataIso.nullable().describe('Passeio: quando o passeador pegou o pet'),
+    finalizadoEm: dataIso.nullable().describe('Passeio: quando o passeador devolveu o pet'),
     papel: z
       .enum(['cliente', 'prestador'])
       .describe('Se o usuário da requisição fez ou recebeu o pedido'),
@@ -74,6 +78,22 @@ const esquemaContratacao = z
       .describe('A avaliação do cliente, depois de concluído'),
   })
   .meta({ id: 'Contratacao' });
+
+/** Um envio a cada ~10 s com um ponto a cada ~3 s dá bem menos que isso. */
+const MAX_PONTOS_POR_ENVIO = 200;
+
+const esquemaAcompanhamento = z
+  .object({
+    status: z.enum(STATUS_CONTRATACAO),
+    iniciadoEm: dataIso.nullable(),
+    finalizadoEm: dataIso.nullable(),
+    posicaoEm: dataIso.nullable().describe('Quando chegou o último ponto'),
+    duracaoMin: z.number().int().describe('Do início até agora, ou até o fim'),
+    distanciaKm: z.number().describe('Do trajeto inteiro, calculada no servidor'),
+    totalPontos: z.number().int().describe('Mande como `desde` na próxima consulta'),
+    pontos: z.array(latLng).describe('Os pontos a partir de `desde`'),
+  })
+  .meta({ id: 'Acompanhamento' });
 
 export const contratacoesEndpoints: FastifyPluginAsyncZod = async (app) => {
   app.addHook('onRequest', autenticar);
@@ -156,13 +176,17 @@ export const contratacoesEndpoints: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         tags: ['servicos'],
-        summary: 'Aceita, recusa, conclui ou cancela um pedido',
+        summary: 'Aceita, recusa, inicia o passeio, conclui ou cancela um pedido',
         description:
           'O prestador aceita ou recusa um pedido pendente e conclui um aceito (depois do início). ' +
+          'No passeio, o passeador marca `em_andamento` ao pegar o pet (até 2 h antes do horário) ' +
+          'e `concluida` ao devolver; o passeio não pode ser concluído sem ter sido iniciado. ' +
           'Qualquer das partes cancela enquanto está pendente ou aceito.',
         security: seguranca,
         params: paramId,
-        body: z.object({ status: z.enum(['aceita', 'recusada', 'cancelada', 'concluida']) }),
+        body: z.object({
+          status: z.enum(['aceita', 'recusada', 'em_andamento', 'cancelada', 'concluida']),
+        }),
         response: { 200: esquemaContratacao, ...erros(400, 401, 403, 404, 409) },
       },
     },
@@ -185,5 +209,46 @@ export const contratacoesEndpoints: FastifyPluginAsyncZod = async (app) => {
       },
     },
     (req) => servico.avaliar(usuarioDe(req).id, req.params.id, req.body.nota, req.body.comentario),
+  );
+
+  app.post(
+    '/:id/posicoes',
+    {
+      schema: {
+        tags: ['servicos'],
+        summary: 'O passeador envia os pontos novos do GPS (só com o passeio em andamento)',
+        description:
+          'Chamado a cada poucos segundos com os pontos acumulados desde o último envio. ' +
+          `O trajeto inteiro tem no máximo ${MAX_PONTOS_TRAJETO} pontos.`,
+        security: seguranca,
+        params: paramId,
+        body: z.object({ pontos: z.array(latLng).min(1).max(MAX_PONTOS_POR_ENVIO) }),
+        response: { 204: semConteudo, ...erros(400, 401, 403, 404, 409) },
+      },
+    },
+    async (req, reply) => {
+      await servico.registrarPosicoes(usuarioDe(req).id, req.params.id, req.body.pontos);
+      return reply.status(204).send(null);
+    },
+  );
+
+  app.get(
+    '/:id/acompanhamento',
+    {
+      schema: {
+        tags: ['servicos'],
+        summary: 'Trajeto do passeio para acompanhar ao vivo (só o cliente e o passeador)',
+        description:
+          'Feito para ser consultado a cada poucos segundos: mande em `desde` o `totalPontos` ' +
+          'da resposta anterior e venham só os pontos novos.',
+        security: seguranca,
+        params: paramId,
+        querystring: z.object({
+          desde: z.coerce.number().int().min(0).default(0).describe('Pula os primeiros N pontos'),
+        }),
+        response: { 200: esquemaAcompanhamento, ...erros(400, 401, 404) },
+      },
+    },
+    (req) => servico.acompanhamento(usuarioDe(req).id, req.params.id, req.query.desde),
   );
 };
