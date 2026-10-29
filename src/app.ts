@@ -24,6 +24,7 @@ import { encontrosEndpoints } from './modulos/encontros/endpoints.js';
 import { fotosEndpoints } from './modulos/fotos/endpoints.js';
 import { passeiosEndpoints } from './modulos/passeios/endpoints.js';
 import { perfilEndpoints } from './modulos/perfil/endpoints.js';
+import { petsEndpoints } from './modulos/pets/endpoints.js';
 import { rotasEndpoints } from './modulos/rotas/endpoints.js';
 
 // Mensagens de validação do Zod em português (vão no campo `campos` das respostas 400).
@@ -95,6 +96,7 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
       tags: [
         { name: 'auth', description: 'Cadastro, login e sessão' },
         { name: 'perfil', description: 'Dados do tutor e dos pets' },
+        { name: 'pets', description: 'Perfil público dos pets e álbum de fotos' },
         { name: 'fotos', description: 'Fotos do tutor e dos pets' },
         { name: 'encontros', description: 'Encontros entre pets' },
         { name: 'rotas', description: 'Rotas de passeio' },
@@ -111,6 +113,7 @@ export async function criarApp({ config, banco, enviarEmail, logger }: OpcoesApp
 
   await app.register(authEndpoints, { prefix: '/auth' });
   await app.register(perfilEndpoints, { prefix: '/perfil' });
+  await app.register(petsEndpoints, { prefix: '/pets' });
   await app.register(fotosEndpoints, { prefix: '/fotos' });
   await app.register(encontrosEndpoints, { prefix: '/encontros' });
   await app.register(rotasEndpoints, { prefix: '/rotas' });

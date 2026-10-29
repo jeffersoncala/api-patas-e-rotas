@@ -30,7 +30,7 @@ export const MAX_PETS = 10;
 const foto = z.string().nullable().describe('Caminho da foto na API (`/fotos/<id>`), ou null');
 
 /** Mesmo formato do `Pet` do front. */
-const esquemaPet = z
+export const esquemaPet = z
   .object({
     id: z.number().int(),
     nome: z.string(),
